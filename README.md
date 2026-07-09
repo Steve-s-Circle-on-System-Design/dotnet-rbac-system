@@ -142,4 +142,3 @@ See CONTRIBUTORS.md for branch naming, commit conventions, and PR process.
 
 ## License
 
-See LICENSE.
