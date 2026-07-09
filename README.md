@@ -86,7 +86,7 @@ Note: given the scope here, Services/ will likely need subfolders (Auth/, Email/
 
 Clone the repo:
 
-git clone https://github.com/<org>/dotnet-rbac-system.git
+git clone https://github.com/Steve-s-Circle-on-System-Design/dotnet-rbac-system.git
 cd dotnet-rbac-system
 dotnet restore
 
