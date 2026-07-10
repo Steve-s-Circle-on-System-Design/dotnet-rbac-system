@@ -154,6 +154,38 @@ Fixes issue where retries would not trigger after the first failure.
 Fixes #456
 
 ---
+## Branch Naming Convention
+Please create branches using the format:
+
+type/short-description
+Allowed branch types
+feat/ – New feature
+fix/ – Bug fix
+docs/ – Documentation changes
+test/ – Adding or updating tests
+refactor/ – Code restructuring without changing behavior
+chore/ – Project setup, dependencies, or maintenance
+perf/ – Performance improvements
+style/ – Formatting, whitespace, or code style changes
+
+ #### Examples
+ 
+feat/user-registration
+feat/jwt-authentication
+feat/role-permission-management
+
+fix/login-validation-error
+fix/password-reset-token
+
+docs/update-readme
+docs/add-api-contract
+
+test/auth-service-tests
+test/user-controller-tests
+
+refactor/cleanup-auth-service
+
+chore/add-github-actions
 
 9. ### Testing Requirements:
     ✅ All new features must include unit tests (xUnit)
