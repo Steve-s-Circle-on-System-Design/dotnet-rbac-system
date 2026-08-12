@@ -2,18 +2,25 @@
 
 ## Current state
 
-The repository currently provides a Clean Architecture scaffold. Domain entities,
-authentication use cases, repositories, entity configurations, and migrations will
-be introduced with their related features rather than represented by placeholders.
+The repository uses Clean Architecture. The database foundation now includes the
+domain entities, EF Core configurations, and initial PostgreSQL migration. The
+authentication use cases and repositories will be introduced with their related
+features rather than represented by placeholders.
 
 ```text
 dotnet-rbac-system/
 |-- src/
 |   |-- RbacSystem.Domain/
+|   |   |-- Common/EntityId.cs
+|   |   |-- Entities/
+|   |   `-- Enums/
 |   |-- RbacSystem.Application/
 |   |   `-- DependencyInjection.cs
 |   |-- RbacSystem.Infrastructure/
-|   |   |-- Persistence/AppDbContext.cs
+|   |   |-- Persistence/
+|   |   |   |-- Configurations/
+|   |   |   |-- Migrations/
+|   |   |   `-- AppDbContext.cs
 |   |   `-- DependencyInjection.cs
 |   `-- RbacSystem.API/
 |       |-- Controllers/HealthController.cs
@@ -58,7 +65,7 @@ HTTP request
 Controllers must remain thin. Business decisions belong in Application or Domain,
 and EF Core queries belong in Infrastructure.
 
-## Planned feature placement
+## Feature placement
 
 ```text
 RbacSystem.Domain/
@@ -87,9 +94,9 @@ RbacSystem.API/
 Folders should be added only when their feature is implemented. Empty placeholder
 classes are not required.
 
-## Agreed persistence direction
+## Implemented persistence model
 
-The future schema will contain `users`, `otp_verifications`, `email_logs`,
+The initial migration creates `users`, `otp_verifications`, `email_logs`,
 `audit_logs`, `refresh_tokens`, `password_resets`, and `files`.
 
 - Identifiers are canonical lowercase UUID v4 strings stored as `varchar(36)`.
@@ -100,8 +107,8 @@ The future schema will contain `users`, `otp_verifications`, `email_logs`,
 - Security timestamps use UTC and PostgreSQL `timestamp with time zone`.
 - Entity mappings belong in individual Infrastructure configuration classes.
 
-These decisions describe the target implementation; the scaffold must not claim
-that the schema exists before its migration is added.
+The detailed table, column, index, constraint, and relationship mappings live in
+`RbacSystem.Infrastructure/Persistence/Configurations`.
 
 ## Authentication direction
 
@@ -139,4 +146,3 @@ Schema-changing work must:
 4. Apply migrations to a disposable PostgreSQL database and verify rollback.
 5. Never edit a migration after it has reached a shared branch or environment;
    add a corrective migration instead.
-

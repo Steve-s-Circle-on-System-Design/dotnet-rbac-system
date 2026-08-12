@@ -45,3 +45,12 @@ csharp_style_prefer_primary_constructors = true:suggestion
 csharp_style_var_for_built_in_types = false:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
 csharp_style_var_elsewhere = false:suggestion
+
+# EF Core migration files are generated and should not be hand-optimized.
+[**/Persistence/Migrations/*.cs]
+generated_code = true
+
+# EF's fluent configuration methods mutate the supplied builder; their return
+# values are intentionally not assigned.
+[**/Persistence/Configurations/*.cs]
+dotnet_diagnostic.IDE0058.severity = none

@@ -5,9 +5,9 @@ Role-Based Access Control (RBAC) system built with ASP.NET Core and Entity Frame
 This is the C#/.NET implementation of the team's multi-language RBAC project. Sibling implementations exist in Python (FastAPI), Go, and TypeScript. See the API Contract section below for how this service is expected to line up with those.
 
 > **Current branch status:** the solution contains the Clean Architecture and
-> PostgreSQL/EF Core foundation. Premature placeholder entities and repositories
-> have been removed; the domain entities, repositories, and migrations described
-> below will be added with the core implementation.
+> PostgreSQL/EF Core foundation. The seven-table domain model, entity mappings,
+> and initial migration are implemented. Authentication use cases, repositories,
+> and endpoints will be added with their related features.
 
 ## Key Deliverables
 
@@ -171,8 +171,7 @@ migration after it has reached a shared branch; create a corrective migration.
 Endpoints, request/response shapes, and status codes are still being finalized with the other language teams so that all four implementations expose a consistent contract. This section will be filled in once that's agreed, and should eventually cover:
 
 - Auth endpoints (register, login, Google OAuth callback, magic OTP request/verify, email verification, password reset, refresh token)
-- Role and permission management endpoints
-- User-role assignment endpoints
+- User and Admin role-protected endpoints
 - File upload endpoints
 - Admin dashboard endpoints (if built)
 - Expected response formats and error shapes
@@ -183,7 +182,7 @@ Things not locked in yet, tracked here so nobody assumes they're settled:
 
 - Event handling mechanism (MediatR vs BackgroundService vs something else)
 - Email delivery approach (transactional provider like SendGrid/Postmark vs raw SMTP with custom tracking)
-- Whether roles/permissions are seeded or admin-managed at runtime
+- Authorization policies and the exact Admin management endpoint contract
 - Whether the Admin Dashboard is being built for this milestone or deferred
 
 ## Branching & Workflow
