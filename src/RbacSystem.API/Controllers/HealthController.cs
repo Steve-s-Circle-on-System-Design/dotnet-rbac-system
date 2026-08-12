@@ -7,5 +7,8 @@ namespace RbacSystem.API.Controllers;
 public class HealthController : ControllerBase
 {
     [HttpGet]
-    public IActionResult Get() => Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
+    public IActionResult Get()
+    {
+        return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
+    }
 }

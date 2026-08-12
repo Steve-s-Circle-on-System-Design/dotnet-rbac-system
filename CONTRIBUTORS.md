@@ -19,7 +19,7 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 
 1. ### Clone the Repository:
 ```bash
-   git clone https://github.com/<org>/dotnet-rbac-system.git
+   git clone https://github.com/Steve-s-Circle-on-System-Design/dotnet-rbac-system.git
    cd dotnet-rbac-system
 ```
 
@@ -33,35 +33,40 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 ---
 
 3. ### Configure Secrets:
-    Initialize user secrets and configure your credentials locally (never in appsettings.json):
+    The API project already has a `UserSecretsId`. Configure credentials locally
+    from the repository root (not in appsettings.json):
 
 ```bash
-    dotnet user-secrets init
+    dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=rbac_system;Username=postgres;Password=yourpassword" --project src/RbacSystem.API
 ```
 
     #### App Config
-    dotnet user-secrets set "Kestrel:Port" "5000"
+    dotnet user-secrets set "Kestrel:Port" "5000" --project src/RbacSystem.API
 
     #### JWT Configuration Secrets
-    dotnet user-secrets set "Jwt:Key" "your_super_secret_access_key"
-    dotnet user-secrets set "Jwt:AccessTokenExpiryMinutes" "15"
-    dotnet user-secrets set "Jwt:EmailVerificationSecret" "your_email_verification_secret_key"
+    dotnet user-secrets set "Jwt:Key" "your_super_secret_access_key" --project src/RbacSystem.API
+    dotnet user-secrets set "Jwt:AccessTokenExpiryMinutes" "15" --project src/RbacSystem.API
+    dotnet user-secrets set "Jwt:EmailVerificationSecret" "your_email_verification_secret_key" --project src/RbacSystem.API
 
     #### Cloudinary Credentials
-    dotnet user-secrets set "Cloudinary:CloudName" "your_cloud_name"
-    dotnet user-secrets set "Cloudinary:ApiKey" "your_api_key"
-    dotnet user-secrets set "Cloudinary:ApiSecret" "your_api_secret"
+    dotnet user-secrets set "Cloudinary:CloudName" "your_cloud_name" --project src/RbacSystem.API
+    dotnet user-secrets set "Cloudinary:ApiKey" "your_api_key" --project src/RbacSystem.API
+    dotnet user-secrets set "Cloudinary:ApiSecret" "your_api_secret" --project src/RbacSystem.API
 
-    #### Database
-    dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=rbac_system;Username=postgres;Password=yourpassword"
+    Each contributor uses a separate local PostgreSQL database and data while
+    committed EF Core migrations keep the schema consistent.
 
 ---
 
 4. ### Run Database Migrations:
 ```bash
-    dotnet ef migrations add InitialCreate
-    dotnet ef database update
+    dotnet ef migrations add InitialCreate --project src/RbacSystem.Infrastructure --startup-project src/RbacSystem.API --output-dir Persistence/Migrations
+    dotnet ef database update --project src/RbacSystem.Infrastructure --startup-project src/RbacSystem.API
 ```
+
+    Commit migration source files with schema changes. Synchronize with the target
+    branch before generating a migration, review `Up()` and `Down()`, and do not
+    edit a migration after it reaches a shared branch or environment.
 
 ---
 

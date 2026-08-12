@@ -4,6 +4,11 @@ Role-Based Access Control (RBAC) system built with ASP.NET Core and Entity Frame
 
 This is the C#/.NET implementation of the team's multi-language RBAC project. Sibling implementations exist in Python (FastAPI), Go, and TypeScript. See the API Contract section below for how this service is expected to line up with those.
 
+> **Current branch status:** the solution contains the Clean Architecture and
+> PostgreSQL/EF Core foundation. Premature placeholder entities and repositories
+> have been removed; the domain entities, repositories, and migrations described
+> below will be added with the core implementation.
+
 ## Key Deliverables
 
 | Feature        | Description |
@@ -63,12 +68,12 @@ An isolated, swappable file upload module with no vendor lock-in baked into the 
 dotnet-rbac-system/
 ├── Rbac-System.sln
 ├── src/
-│   ├── Rbac-System.Domain/          # Entities, value objects — no external dependencies
-│   ├── Rbac-System.Application/     # Interfaces, use-cases — depends on Domain only
-│   ├── Rbac-System.Infrastructure/  # EF Core, PostgreSQL, repositories — depends on Application + Domain
-│   └── Rbac-System.API/             # Controllers, Swagger, Program.cs — depends on Application + Infrastructure
+│   ├── RbacSystem.Domain/          # Entities, value objects — no external dependencies
+│   ├── RbacSystem.Application/     # Interfaces, use-cases — depends on Domain only
+│   ├── RbacSystem.Infrastructure/  # EF Core, PostgreSQL, repositories — depends on Application + Domain
+│   └── RbacSystem.API/             # Controllers, Swagger, Program.cs — depends on Application + Infrastructure
 └── tests/
-    └── Rbac-System.Tests/           # xUnit tests — references all src layers
+    └── RbacSystem.Tests/           # xUnit tests — references all src layers
 ```
 
 Dependency direction: `API → Infrastructure → Application → Domain` (Domain has zero outbound dependencies).
@@ -96,19 +101,22 @@ dotnet restore Rbac-System.sln
 
 ### Configuration
 
-Do not commit real credentials. Use `dotnet user-secrets` for local development (run from the `src/Rbac-System.API` directory):
+Do not commit real credentials. The API project already has a `UserSecretsId`.
+Configure local values from the repository root with:
 
 ```bash
-cd src/Rbac-System.API
-dotnet user-secrets init
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=rbac_system;Username=postgres;Password=yourpassword"
-dotnet user-secrets set "Jwt:Key" "your-local-dev-secret-at-least-32-chars"
-dotnet user-secrets set "Cloudinary:CloudName" "your-cloud-name"
-dotnet user-secrets set "Cloudinary:ApiKey" "your-api-key"
-dotnet user-secrets set "Cloudinary:ApiSecret" "your-api-secret"
-dotnet user-secrets set "Google:ClientId" "your-google-client-id"
-dotnet user-secrets set "Google:ClientSecret" "your-google-client-secret"
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=rbac_system;Username=postgres;Password=yourpassword" --project src/RbacSystem.API
+dotnet user-secrets set "Jwt:Key" "your-local-dev-secret-at-least-32-chars" --project src/RbacSystem.API
+dotnet user-secrets set "Cloudinary:CloudName" "your-cloud-name" --project src/RbacSystem.API
+dotnet user-secrets set "Cloudinary:ApiKey" "your-api-key" --project src/RbacSystem.API
+dotnet user-secrets set "Cloudinary:ApiSecret" "your-api-secret" --project src/RbacSystem.API
+dotnet user-secrets set "Google:ClientId" "your-google-client-id" --project src/RbacSystem.API
+dotnet user-secrets set "Google:ClientSecret" "your-google-client-secret" --project src/RbacSystem.API
 ```
+
+Each contributor uses a separate local database and data. EF Core migration files
+are committed so every contributor and environment shares the same schema; local
+credentials, database dumps, and database data are not committed.
 
 ### Build
 
@@ -135,7 +143,7 @@ dotnet format Rbac-System.sln
 ### Run
 
 ```bash
-dotnet run --project src/Rbac-System.API
+dotnet run --project src/RbacSystem.API
 ```
 
 Swagger UI loads at `http://localhost:<port>` (root URL) in Development mode.
@@ -145,14 +153,18 @@ Swagger UI loads at `http://localhost:<port>` (root URL) in Development mode.
 ```bash
 # Add a migration (run from repo root)
 dotnet ef migrations add InitialCreate \
-  --project src/Rbac-System.Infrastructure \
-  --startup-project src/Rbac-System.API
+  --project src/RbacSystem.Infrastructure \
+  --startup-project src/RbacSystem.API \
+  --output-dir Persistence/Migrations
 
 # Apply to the database
 dotnet ef database update \
-  --project src/Rbac-System.Infrastructure \
-  --startup-project src/Rbac-System.API
+  --project src/RbacSystem.Infrastructure \
+  --startup-project src/RbacSystem.API
 ```
+
+Synchronize with the target branch before generating a migration. Do not edit a
+migration after it has reached a shared branch; create a corrective migration.
 
 ## API Contract
 
@@ -179,4 +191,3 @@ Things not locked in yet, tracked here so nobody assumes they're settled:
 See CONTRIBUTORS.md for branch naming, commit conventions, and PR process.
 
 ## License
-

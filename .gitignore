@@ -482,3 +482,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+/Rbac-System-Project-Structure.md
+/Rbac-System.csproj
+/Rbac-System.sln
+/Models/Users.cs
