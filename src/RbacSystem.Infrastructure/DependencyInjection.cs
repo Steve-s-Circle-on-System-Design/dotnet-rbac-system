@@ -1,10 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using RbacSystem.Application.Interfaces;
-using RbacSystem.Application.Interfaces.Repositories;
 using RbacSystem.Infrastructure.Persistence;
-using RbacSystem.Infrastructure.Repositories;
 
 namespace RbacSystem.Infrastructure;
 
@@ -14,14 +11,15 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(
-                configuration.GetConnectionString("DefaultConnection"),
-                npgsql => npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
+        string connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException(
+                "The 'ConnectionStrings:DefaultConnection' setting is required. " +
+                "Configure it with .NET user secrets for local development.");
 
-        services.AddScoped<IUserRepository, UserRepository>();
-        services.AddScoped<IRoleRepository, RoleRepository>();
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        _ = services.AddDbContext<AppDbContext>(options =>
+            options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
 
         return services;
     }

@@ -1,182 +1,94 @@
-# RBAC Auth System (C# / .NET)
+# RBAC Auth System (.NET)
 
-Role-Based Access Control (RBAC) system built with ASP.NET Core and Entity Framework Core.
+An open-source, multi-channel authentication and role-based authorization system
+built with ASP.NET Core, Entity Framework Core, and PostgreSQL.
 
-This is the C#/.NET implementation of the team's multi-language RBAC project. Sibling implementations exist in Python (FastAPI), Go, and TypeScript. See the API Contract section below for how this service is expected to line up with those.
+## Current state
 
-## Key Deliverables
+This branch contains the Clean Architecture foundation:
 
-| Feature        | Description |
-|----------------|--------------|
-| Authentication | Complete auth flow: register, login, email verification, password reset |
-| Security | JWT token rotation, account lockout, RBAC, and endpoint defense |
-| Email System | Event-driven email delivery with transactional tracking and analytics |
-| File Upload | Modular file upload system with Cloudinary integration |
-| Admin Dashboard | User management, email analytics, and system monitoring (optional) |
+- .NET 8 solution split into Domain, Application, Infrastructure, API, and Tests
+- ASP.NET Core controllers and a basic health endpoint
+- Swagger/OpenAPI
+- EF Core and Npgsql registration
+- Local configuration through .NET user secrets
 
-## Tech Stack
+Domain entities, repositories, database migrations, and authentication endpoints
+will be added with the core implementation. The current scaffold intentionally does
+not contain placeholder role, permission, or user models.
 
-- Runtime: .NET 8
-- Framework: ASP.NET Core Web API
-- ORM: Entity Framework Core
-- Database: PostgreSQL
-- Auth: JWT Bearer tokens (access + rotating refresh tokens), ASP.NET Core Identity, Google OAuth 2.0
-- Password hashing: bcrypt (BCrypt.Net-Next)
-- Event handling: likely MediatR for decoupled domain events, or BackgroundService for async processing (open decision)
-- Email delivery: transactional provider (e.g. SendGrid, Postmark) vs raw SMTP (open decision)
-- File storage: Cloudinary (CloudinaryDotNet)
-- Docs: Swagger / OpenAPI
+## Planned capabilities
 
-## Core Features
+- Email/password authentication with bcrypt hashing
+- Google OAuth 2.0 with secure account linking
+- Six-digit passwordless OTP authentication
+- 15-minute JWT access tokens
+- Single-use, rotating seven-day refresh tokens
+- Multiple device sessions using token families
+- Account-wide token revocation on password change or global logout
+- Five-attempt login lockout for 15 minutes
+- Fixed `User` and `Admin` authorization roles
+- Transactional email tracking and audit logs
+- Cloudinary-backed file storage
 
-### Authentication
+## Architecture
 
-Three ways in: email + password with bcrypt hashing, Google OAuth 2.0 with automatic account linking, and passwordless login via a 6-digit magic OTP sent by email.
-
-### Token Lifecycle
-
-Short-lived access tokens (15 minute expiry) for normal requests, single-use refresh tokens (7 day expiry) with rotation for sessions, and automatic revocation of tokens on password change or logout.
-
-### Account Lockout
-
-Failed login attempts are tracked in real time. Five consecutive failures locks the account for 15 minutes, calculated via timestamp math, with a security alert emailed to the user when a lock occurs.
-
-### Role-Based Access Control
-
-Two tiers to start: User for standard authenticated access, Admin for privileged operations. Enforced via custom `[Roles]` attributes and policy-based or guard-style authorization on protected routes.
-
-### Endpoint Defense
-
-Security headers to prevent XSS and clickjacking, CORS with dynamic origin validation, and strict input validation/sanitization on all incoming requests.
-
-### Event-Driven Email System
-
-Emails are sent asynchronously so users never wait on them during a request. Every outbound email is logged in an `email_logs` table for full visibility into what was sent, to whom, and when. Delivery status moves through a state machine: Pending, Sent, Delivered, Opened, Clicked. Outbound calls to the email provider are wrapped with retry logic (exponential backoff) for resilience, and aggregated metrics are tracked for open rate, bounce rate, click rate, and delivery rate.
-
-### File Upload
-
-An isolated, swappable file upload module with no vendor lock-in baked into the rest of the app. Files stream directly from memory (no disk writes) straight to Cloudinary.
-
-## Project Structure
-
-```
-dotnet-rbac-system/
-├── Rbac-System.sln
-├── src/
-│   ├── Rbac-System.Domain/          # Entities, value objects — no external dependencies
-│   ├── Rbac-System.Application/     # Interfaces, use-cases — depends on Domain only
-│   ├── Rbac-System.Infrastructure/  # EF Core, PostgreSQL, repositories — depends on Application + Domain
-│   └── Rbac-System.API/             # Controllers, Swagger, Program.cs — depends on Application + Infrastructure
-└── tests/
-    └── Rbac-System.Tests/           # xUnit tests — references all src layers
+```text
+API -> Application -> Domain
+ |                    ^
+ `-> Infrastructure --|
 ```
 
-Dependency direction: `API → Infrastructure → Application → Domain` (Domain has zero outbound dependencies).
+See `Rbac-System-Project-Structure.md` for responsibilities, dependency rules,
+planned request flow, and persistence conventions.
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites
-
-- .NET 8 SDK (https://dotnet.microsoft.com/download)
-- PostgreSQL (running locally or accessible via connection string)
-- A Cloudinary account (for file upload)
-- Credentials for the chosen email provider
-- A Google Cloud OAuth 2.0 client ID/secret (for social login)
+- .NET 8 SDK or a newer compatible SDK
+- PostgreSQL
 - Git
 
-### Setup
+## Setup
 
-Clone the repo:
+From the repository root:
 
-```bash
-git clone https://github.com/Steve-s-Circle-on-System-Design/dotnet-rbac-system.git
-cd dotnet-rbac-system
+```powershell
 dotnet restore Rbac-System.sln
-```
-
-### Configuration
-
-Do not commit real credentials. Use `dotnet user-secrets` for local development (run from the `src/Rbac-System.API` directory):
-
-```bash
-cd src/Rbac-System.API
-dotnet user-secrets init
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=rbac_system;Username=postgres;Password=yourpassword"
-dotnet user-secrets set "Jwt:Key" "your-local-dev-secret-at-least-32-chars"
-dotnet user-secrets set "Cloudinary:CloudName" "your-cloud-name"
-dotnet user-secrets set "Cloudinary:ApiKey" "your-api-key"
-dotnet user-secrets set "Cloudinary:ApiSecret" "your-api-secret"
-dotnet user-secrets set "Google:ClientId" "your-google-client-id"
-dotnet user-secrets set "Google:ClientSecret" "your-google-client-secret"
-```
-
-### Build
-
-```bash
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=rbac_dev;Username=YOUR_USERNAME;Password=YOUR_PASSWORD" --project src/RbacSystem.API
 dotnet build Rbac-System.sln
+dotnet run --project src/RbacSystem.API
 ```
 
-### Test
+The API project already has a `UserSecretsId`. Each contributor supplies a local
+connection string for their own PostgreSQL database. Contributors share committed
+migrations and therefore the same schema, but they do not share credentials or
+local data.
 
-```bash
+Do not add connection strings, JWT keys, OAuth secrets, email-provider credentials,
+or Cloudinary credentials to tracked `appsettings` files.
+
+In production, provide secrets through environment variables or a managed secret
+store. For example, `ConnectionStrings__DefaultConnection` maps to
+`ConnectionStrings:DefaultConnection` in ASP.NET Core configuration.
+
+## Checks
+
+```powershell
+dotnet build Rbac-System.sln
 dotnet test Rbac-System.sln
-```
-
-### Format
-
-```bash
-# Check formatting without making changes (used in CI)
 dotnet format Rbac-System.sln --verify-no-changes
-
-# Apply formatting
-dotnet format Rbac-System.sln
 ```
 
-### Run
+## Future migration workflow
 
-```bash
-dotnet run --project src/Rbac-System.API
+After the core entity model is implemented, migrations will be generated from the
+repository root:
+
+```powershell
+dotnet ef migrations add InitialCreate --project src/RbacSystem.Infrastructure --startup-project src/RbacSystem.API --output-dir Persistence/Migrations
+dotnet ef database update --project src/RbacSystem.Infrastructure --startup-project src/RbacSystem.API
 ```
 
-Swagger UI loads at `http://localhost:<port>` (root URL) in Development mode.
-
-### Apply EF Core Migrations
-
-```bash
-# Add a migration (run from repo root)
-dotnet ef migrations add InitialCreate \
-  --project src/Rbac-System.Infrastructure \
-  --startup-project src/Rbac-System.API
-
-# Apply to the database
-dotnet ef database update \
-  --project src/Rbac-System.Infrastructure \
-  --startup-project src/Rbac-System.API
-```
-
-## API Contract
-
-Endpoints, request/response shapes, and status codes are still being finalized with the other language teams so that all four implementations expose a consistent contract. This section will be filled in once that's agreed, and should eventually cover:
-
-- Auth endpoints (register, login, Google OAuth callback, magic OTP request/verify, email verification, password reset, refresh token)
-- Role and permission management endpoints
-- User-role assignment endpoints
-- File upload endpoints
-- Admin dashboard endpoints (if built)
-- Expected response formats and error shapes
-
-## Open Decisions
-
-Things not locked in yet, tracked here so nobody assumes they're settled:
-
-- Event handling mechanism (MediatR vs BackgroundService vs something else)
-- Email delivery approach (transactional provider like SendGrid/Postmark vs raw SMTP with custom tracking)
-- Whether roles/permissions are seeded or admin-managed at runtime
-- Whether the Admin Dashboard is being built for this milestone or deferred
-
-## Branching & Workflow
-
-See CONTRIBUTORS.md for branch naming, commit conventions, and PR process.
-
-## License
+Migration source files are committed. Local PostgreSQL data, database dumps, secret
+values, and the contents of a database's `__EFMigrationsHistory` table are not.
 
