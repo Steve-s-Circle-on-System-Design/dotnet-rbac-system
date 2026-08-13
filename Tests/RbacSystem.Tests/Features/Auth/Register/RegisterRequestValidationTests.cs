@@ -11,8 +11,8 @@ namespace RbacSystem.Tests.Features.Auth.Register;
 /// </summary>
 public class RegisterRequestValidationTests
 {
-    private const string ValidEmail = "ada@example.com";
-    private const string ValidPassword = "Str0ng!Passw0rd";
+    private const string validEmail = "ada@example.com";
+    private const string validPassword = "Str0ng!Passw0rd";
 
     private static List<ValidationResult> Validate(string email, string password)
     {
@@ -36,7 +36,7 @@ public class RegisterRequestValidationTests
     [Fact]
     public void Request_IsValid_WithConformingEmailAndPassword()
     {
-        Assert.True(IsValid(ValidEmail, ValidPassword));
+        Assert.True(IsValid(validEmail, validPassword));
     }
 
     [Theory]
@@ -46,7 +46,7 @@ public class RegisterRequestValidationTests
     [InlineData("@example.com")]
     public void Request_IsInvalid_ForMalformedEmail(string email)
     {
-        Assert.False(IsValid(email, ValidPassword));
+        Assert.False(IsValid(email, validPassword));
     }
 
     [Fact]
@@ -54,13 +54,13 @@ public class RegisterRequestValidationTests
     {
         string longEmail = new string('a', 250) + "@example.com";
 
-        Assert.False(IsValid(longEmail, ValidPassword));
+        Assert.False(IsValid(longEmail, validPassword));
     }
 
     [Fact]
     public void Password_IsInvalid_WhenMissing()
     {
-        Assert.False(IsValid(ValidEmail, string.Empty));
+        Assert.False(IsValid(validEmail, string.Empty));
     }
 
     [Theory]
@@ -70,7 +70,7 @@ public class RegisterRequestValidationTests
     {
         Assert.Contains(
             "at least",
-            Assert.Single(Validate(ValidEmail, password)).ErrorMessage,
+            Assert.Single(Validate(validEmail, password)).ErrorMessage,
             StringComparison.Ordinal);
     }
 
@@ -79,7 +79,7 @@ public class RegisterRequestValidationTests
     {
         Assert.Contains(
             "lowercase",
-            Assert.Single(Validate(ValidEmail, "PASSW0RD!")).ErrorMessage,
+            Assert.Single(Validate(validEmail, "PASSW0RD!")).ErrorMessage,
             StringComparison.Ordinal);
     }
 
@@ -88,7 +88,7 @@ public class RegisterRequestValidationTests
     {
         Assert.Contains(
             "uppercase",
-            Assert.Single(Validate(ValidEmail, "passw0rd!")).ErrorMessage,
+            Assert.Single(Validate(validEmail, "passw0rd!")).ErrorMessage,
             StringComparison.Ordinal);
     }
 
@@ -97,14 +97,14 @@ public class RegisterRequestValidationTests
     {
         Assert.Contains(
             "special",
-            Assert.Single(Validate(ValidEmail, "Passw0rdAb")).ErrorMessage,
+            Assert.Single(Validate(validEmail, "Passw0rdAb")).ErrorMessage,
             StringComparison.Ordinal);
     }
 
     [Fact]
     public void Password_ReportsEveryMissingCharacterClass()
     {
-        string? message = Assert.Single(Validate(ValidEmail, "abcdefgh")).ErrorMessage;
+        string? message = Assert.Single(Validate(validEmail, "abcdefgh")).ErrorMessage;
 
         Assert.Contains("uppercase", message, StringComparison.Ordinal);
         Assert.Contains("special", message, StringComparison.Ordinal);
@@ -114,7 +114,7 @@ public class RegisterRequestValidationTests
     public void Password_TreatsWhitespaceAsNotSpecial()
     {
         // A space must not satisfy the special-character rule on its own.
-        Assert.False(IsValid(ValidEmail, "Passw0rd Ab"));
+        Assert.False(IsValid(validEmail, "Passw0rd Ab"));
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class RegisterRequestValidationTests
         string atLimit = "Aa!" + new string('x', PasswordPolicyAttribute.MaximumByteLength - 3);
 
         Assert.Equal(PasswordPolicyAttribute.MaximumByteLength, Encoding.UTF8.GetByteCount(atLimit));
-        Assert.True(IsValid(ValidEmail, atLimit));
+        Assert.True(IsValid(validEmail, atLimit));
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class RegisterRequestValidationTests
 
         Assert.Contains(
             "bytes",
-            Assert.Single(Validate(ValidEmail, tooLong)).ErrorMessage,
+            Assert.Single(Validate(validEmail, tooLong)).ErrorMessage,
             StringComparison.Ordinal);
     }
 
@@ -146,6 +146,6 @@ public class RegisterRequestValidationTests
 
         Assert.True(multiByte.Length <= PasswordPolicyAttribute.MaximumByteLength);
         Assert.True(Encoding.UTF8.GetByteCount(multiByte) > PasswordPolicyAttribute.MaximumByteLength);
-        Assert.False(IsValid(ValidEmail, multiByte));
+        Assert.False(IsValid(validEmail, multiByte));
     }
 }

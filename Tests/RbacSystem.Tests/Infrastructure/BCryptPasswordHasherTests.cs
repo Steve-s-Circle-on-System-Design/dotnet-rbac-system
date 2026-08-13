@@ -10,13 +10,13 @@ namespace RbacSystem.Tests.Infrastructure;
 /// </summary>
 public partial class BCryptPasswordHasherTests
 {
-    private const string Password = "Str0ng!Passw0rd";
+    private const string password = "Str0ng!Passw0rd";
 
     /// <summary>
     /// Cheapest cost BCrypt accepts. Used so the suite stays fast; the production
     /// default is asserted separately without hashing.
     /// </summary>
-    private const int FastWorkFactor = 4;
+    private const int fastWorkFactor = 4;
 
     private static BCryptPasswordHasher CreateHasher(int workFactor)
     {
@@ -38,28 +38,28 @@ public partial class BCryptPasswordHasherTests
     [Fact]
     public void Hash_ProducesBCryptHash_ThatIsNotThePlaintext()
     {
-        string hash = CreateHasher(FastWorkFactor).Hash(Password);
+        string hash = CreateHasher(fastWorkFactor).Hash(password);
 
         Assert.Matches(BCryptPrefix(), hash);
-        Assert.NotEqual(Password, hash);
-        Assert.DoesNotContain(Password, hash, StringComparison.Ordinal);
+        Assert.NotEqual(password, hash);
+        Assert.DoesNotContain(password, hash, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Hash_ProducesVerifiableHash()
     {
-        string hash = CreateHasher(FastWorkFactor).Hash(Password);
+        string hash = CreateHasher(fastWorkFactor).Hash(password);
 
-        Assert.True(BCrypt.Net.BCrypt.Verify(Password, hash));
+        Assert.True(BCrypt.Net.BCrypt.Verify(password, hash));
         Assert.False(BCrypt.Net.BCrypt.Verify("wrong-password", hash));
     }
 
     [Fact]
     public void Hash_UsesFreshSalt_SoIdenticalPasswordsDiffer()
     {
-        BCryptPasswordHasher hasher = CreateHasher(FastWorkFactor);
+        BCryptPasswordHasher hasher = CreateHasher(fastWorkFactor);
 
-        Assert.NotEqual(hasher.Hash(Password), hasher.Hash(Password));
+        Assert.NotEqual(hasher.Hash(password), hasher.Hash(password));
     }
 
     [Theory]
@@ -67,7 +67,7 @@ public partial class BCryptPasswordHasherTests
     [InlineData(6)]
     public void Hash_AppliesConfiguredWorkFactor(int workFactor)
     {
-        string hash = CreateHasher(workFactor).Hash(Password);
+        string hash = CreateHasher(workFactor).Hash(password);
 
         Match match = BCryptPrefix().Match(hash);
 
@@ -97,7 +97,7 @@ public partial class BCryptPasswordHasherTests
     [InlineData("")]
     public void Hash_Throws_ForMissingPassword(string? password)
     {
-        BCryptPasswordHasher hasher = CreateHasher(FastWorkFactor);
+        BCryptPasswordHasher hasher = CreateHasher(fastWorkFactor);
 
         _ = Assert.ThrowsAny<ArgumentException>(() => hasher.Hash(password!));
     }

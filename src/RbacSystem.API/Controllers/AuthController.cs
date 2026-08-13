@@ -34,16 +34,13 @@ public sealed class AuthController(IRegisterUserService registerUserService) : C
     {
         RegisterResult result = await registerUserService.RegisterAsync(request, cancellationToken);
 
-        if (result == RegisterResult.DuplicateEmail)
-        {
-            return Problem(
+        return result == RegisterResult.DuplicateEmail
+            ? Problem(
                 title: "Registration failed",
                 detail: "Email is already registered",
-                statusCode: StatusCodes.Status400BadRequest);
-        }
-
-        return StatusCode(
-            StatusCodes.Status201Created,
-            new RegisterResponse("Sign Up successful, verify Email."));
+                statusCode: StatusCodes.Status400BadRequest)
+            : StatusCode(
+                StatusCodes.Status201Created,
+                new RegisterResponse("Sign Up successful, verify Email."));
     }
 }

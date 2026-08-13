@@ -11,7 +11,7 @@ public sealed class RegisterUserService(
     IUserRegisteredEventPublisher eventPublisher) : IRegisterUserService
 {
     /// <summary>Matches the length of the <c>users.name</c> column.</summary>
-    private const int MaximumNameLength = 255;
+    private const int maximumNameLength = 255;
 
     /// <inheritdoc />
     public async Task<RegisterResult> RegisterAsync(
@@ -72,8 +72,8 @@ public sealed class RegisterUserService(
         int separatorIndex = normalizedEmail.IndexOf('@');
         string localPart = separatorIndex > 0 ? normalizedEmail[..separatorIndex] : normalizedEmail;
 
-        return localPart.Length > MaximumNameLength
-            ? localPart[..MaximumNameLength]
+        return localPart.Length > maximumNameLength
+            ? localPart[..maximumNameLength]
             : localPart;
     }
 }

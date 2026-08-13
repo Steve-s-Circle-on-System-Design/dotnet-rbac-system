@@ -1,4 +1,5 @@
 using RbacSystem.Application.Features.Auth.Register;
+using RbacSystem.Domain.Entities;
 using RbacSystem.Domain.Enums;
 using RbacSystem.Tests.Fakes;
 
@@ -10,7 +11,7 @@ namespace RbacSystem.Tests.Features.Auth.Register;
 /// </summary>
 public class RegisterUserServiceTests
 {
-    private const string ValidPassword = "Str0ng!Passw0rd";
+    private const string validPassword = "Str0ng!Passw0rd";
 
     private readonly FakeUserRepository userRepository = new();
     private readonly FakePasswordHasher passwordHasher = new();
@@ -21,7 +22,7 @@ public class RegisterUserServiceTests
         return new RegisterUserService(userRepository, passwordHasher, eventPublisher);
     }
 
-    private static RegisterRequest Request(string email, string password = ValidPassword)
+    private static RegisterRequest Request(string email, string password = validPassword)
     {
         return new RegisterRequest { Email = email, Password = password };
     }
@@ -32,7 +33,7 @@ public class RegisterUserServiceTests
         RegisterResult result = await CreateService().RegisterAsync(Request("ada@example.com"));
 
         Assert.Equal(RegisterResult.Success, result);
-        Assert.Single(userRepository.AddedUsers);
+        _ = Assert.Single(userRepository.AddedUsers);
     }
 
     [Theory]
@@ -69,7 +70,7 @@ public class RegisterUserServiceTests
     {
         _ = await CreateService().RegisterAsync(Request("ada@example.com"));
 
-        RbacSystem.Domain.Entities.User created = userRepository.AddedUsers.Single();
+        User created = userRepository.AddedUsers.Single();
 
         Assert.Equal(UserStatus.PendingVerification, created.Status);
         Assert.Null(created.EmailVerifiedAt);
@@ -83,10 +84,10 @@ public class RegisterUserServiceTests
 
         string? storedHash = userRepository.AddedUsers.Single().PasswordHash;
 
-        Assert.Equal(ValidPassword, Assert.Single(passwordHasher.HashedPasswords));
+        Assert.Equal(validPassword, Assert.Single(passwordHasher.HashedPasswords));
         Assert.NotNull(storedHash);
-        Assert.NotEqual(ValidPassword, storedHash);
-        Assert.DoesNotContain(ValidPassword, storedHash, StringComparison.Ordinal);
+        Assert.NotEqual(validPassword, storedHash);
+        Assert.DoesNotContain(validPassword, storedHash, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -96,7 +97,7 @@ public class RegisterUserServiceTests
 
         _ = await CreateService().RegisterAsync(Request("ada@example.com"));
 
-        RbacSystem.Domain.Entities.User created = userRepository.AddedUsers.Single();
+        User created = userRepository.AddedUsers.Single();
 
         Assert.True(Guid.TryParse(created.Id, out _));
         Assert.InRange(created.CreatedAt, before, DateTime.UtcNow.AddSeconds(1));
@@ -108,7 +109,7 @@ public class RegisterUserServiceTests
         _ = await CreateService().RegisterAsync(Request("ada@example.com"));
 
         UserRegisteredEvent published = Assert.Single(eventPublisher.PublishedEvents);
-        RbacSystem.Domain.Entities.User created = userRepository.AddedUsers.Single();
+        User created = userRepository.AddedUsers.Single();
 
         Assert.Equal(created.Id, published.UserId);
         Assert.Equal("ada@example.com", published.Email);

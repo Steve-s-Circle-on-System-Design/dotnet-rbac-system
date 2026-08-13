@@ -10,10 +10,10 @@ namespace RbacSystem.Infrastructure.Repositories;
 public sealed class UserRepository(AppDbContext context) : IUserRepository
 {
     /// <summary>PostgreSQL SQLSTATE for a unique-constraint violation.</summary>
-    private const string UniqueViolationSqlState = "23505";
+    private const string uniqueViolationSqlState = "23505";
 
     /// <summary>Unique index protecting <c>users.email</c>.</summary>
-    private const string EmailUniqueIndexName = "ux_users_email";
+    private const string emailUniqueIndexName = "ux_users_email";
 
     /// <inheritdoc />
     public async Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default)
@@ -50,10 +50,10 @@ public sealed class UserRepository(AppDbContext context) : IUserRepository
     private static bool IsEmailUniqueViolation(DbUpdateException exception)
     {
         return exception.InnerException is PostgresException postgresException
-            && postgresException.SqlState == UniqueViolationSqlState
+            && postgresException.SqlState == uniqueViolationSqlState
             && string.Equals(
                 postgresException.ConstraintName,
-                EmailUniqueIndexName,
+                emailUniqueIndexName,
                 StringComparison.Ordinal);
     }
 }
