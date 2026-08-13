@@ -57,9 +57,9 @@ public class RegisterPasswordSafetyTests
 
         Assert.DoesNotContain("assword", json, StringComparison.OrdinalIgnoreCase);
 
-        using JsonDocument document = JsonDocument.Parse(json);
+        using var document = JsonDocument.Parse(json);
 
-        var only = Assert.Single(document.RootElement.EnumerateObject());
+        JsonProperty only = Assert.Single(document.RootElement.EnumerateObject());
 
         Assert.Equal("message", only.Name);
         Assert.Equal("Sign Up successful, verify Email.", only.Value.GetString());
