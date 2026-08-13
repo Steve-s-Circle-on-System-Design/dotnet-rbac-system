@@ -118,6 +118,31 @@ Each contributor uses a separate local database and data. EF Core migration file
 are committed so every contributor and environment shares the same schema; local
 credentials, database dumps, and database data are not committed.
 
+#### Tunable settings
+
+Security costs and token lifespans are configuration, never hardcoded constants, so
+they can be tuned per environment without a code change. Non-secret defaults live in
+`appsettings.json`; override any of them per environment with an environment
+variable, using `__` as the section separator (for example
+`Security__PasswordHashing__WorkFactor=13`).
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `Security:PasswordHashing:WorkFactor` | `12` | BCrypt cost. Each increment doubles hashing time. Valid range 4–31. Lower it in CI to keep test runs fast; raise it as hardware improves. |
+| `Auth:AccessTokenExpiryMinutes` | `15` | Access-token lifespan. |
+| `Auth:RefreshTokenExpiryDays` | `7` | Refresh-token lifespan. |
+| `Auth:EmailVerificationTokenExpiryHours` | `24` | Email-verification token lifespan. |
+| `Auth:OtpExpiryMinutes` | `10` | Magic-login OTP lifespan. |
+
+Only `Security:PasswordHashing:WorkFactor` is read today, by the registration
+feature. The `Auth:*` lifespans are the agreed keys for the token-issuing features
+and are consumed as those land — they are listed here so that no lifespan is ever
+written as a literal in code.
+
+Secrets — connection strings, JWT signing keys, OAuth client secrets, and email or
+Cloudinary credentials — never belong in `appsettings.json`. Use `dotnet user-secrets`
+locally and environment variables or a managed secret store in production.
+
 ### Build
 
 ```bash
@@ -168,7 +193,35 @@ migration after it has reached a shared branch; create a corrective migration.
 
 ## API Contract
 
-Endpoints, request/response shapes, and status codes are still being finalized with the other language teams so that all four implementations expose a consistent contract. This section will be filled in once that's agreed, and should eventually cover:
+### `POST /api/auth/register`
+
+Creates an unverified account with the default `User` role. The request shape matches
+the TypeScript and Python implementations so all four services stay interchangeable.
+
+Request:
+
+```json
+{ "email": "ada@example.com", "password": "Str0ng!Passw0rd" }
+```
+
+The email is trimmed and lowercased before storage and compared case-insensitively.
+The display name is derived from the email's local part, as the other
+implementations do, because the shared contract carries no name field.
+
+Password policy: at least 8 characters, at most 72 UTF-8 bytes (BCrypt ignores input
+beyond that), and at least one lowercase letter, one uppercase letter, and one
+special character.
+
+| Status | Body | When |
+|---|---|---|
+| `201` | `{ "message": "Sign Up successful, verify Email." }` | Account created |
+| `400` | `ProblemDetails` with detail `Email is already registered` | Address already in use |
+| `400` | `ValidationProblemDetails` | Email malformed or password fails the policy |
+
+### Remaining endpoints
+
+The rest of the endpoints, request/response shapes, and status codes are still being
+finalized with the other language teams. This section should eventually also cover:
 
 - Auth endpoints (register, login, Google OAuth callback, magic OTP request/verify, email verification, password reset, refresh token)
 - User and Admin role-protected endpoints

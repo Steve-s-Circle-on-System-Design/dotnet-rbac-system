@@ -1,7 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using RbacSystem.Application.Interfaces.Repositories;
+using RbacSystem.Application.Interfaces.Services;
+using RbacSystem.Infrastructure.Configuration;
 using RbacSystem.Infrastructure.Persistence;
+using RbacSystem.Infrastructure.Repositories;
+using RbacSystem.Infrastructure.Services;
 
 namespace RbacSystem.Infrastructure;
 
@@ -20,6 +25,13 @@ public static class DependencyInjection
             options.UseNpgsql(
                 connectionString,
                 npgsql => npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
+
+        _ = services.Configure<PasswordHashingOptions>(
+            configuration.GetSection(PasswordHashingOptions.SectionName));
+
+        _ = services.AddScoped<IUserRepository, UserRepository>();
+        _ = services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
+        _ = services.AddScoped<IUserRegisteredEventPublisher, LoggingUserRegisteredEventPublisher>();
 
         return services;
     }

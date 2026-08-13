@@ -45,8 +45,24 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 
     #### JWT Configuration Secrets
     dotnet user-secrets set "Jwt:Key" "your_super_secret_access_key" --project src/RbacSystem.API
-    dotnet user-secrets set "Jwt:AccessTokenExpiryMinutes" "15" --project src/RbacSystem.API
     dotnet user-secrets set "Jwt:EmailVerificationSecret" "your_email_verification_secret_key" --project src/RbacSystem.API
+
+    #### Non-secret tunables — do NOT put these in user secrets
+
+    Token lifespans and hashing costs are configuration, not literals in code. Their
+    defaults are tracked in `appsettings.json` (`Security:PasswordHashing:WorkFactor`
+    and the `Auth:*` expiry keys — see the README's "Tunable settings" table). Override
+    them per environment with environment variables using `__` as the separator:
+
+```bash
+    # e.g. cheaper hashing in CI so test runs stay fast
+    export Security__PasswordHashing__WorkFactor=5
+    export Auth__AccessTokenExpiryMinutes=15
+```
+
+    When adding a feature that needs a lifetime, expiry, cost, or retry count, add a
+    key to `appsettings.json` and bind it with the options pattern. Never hardcode the
+    value.
 
     #### Cloudinary Credentials
     dotnet user-secrets set "Cloudinary:CloudName" "your_cloud_name" --project src/RbacSystem.API
