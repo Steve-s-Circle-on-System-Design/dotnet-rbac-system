@@ -72,7 +72,7 @@ dotnet-rbac-system/
 │   ├── RbacSystem.Application/     # Interfaces, use-cases — depends on Domain only
 │   ├── RbacSystem.Infrastructure/  # EF Core, PostgreSQL, repositories — depends on Application + Domain
 │   └── RbacSystem.API/             # Controllers, Swagger, Program.cs — depends on Application + Infrastructure
-└── tests/
+└── Tests/
     └── RbacSystem.Tests/           # xUnit tests — references all src layers
 ```
 

@@ -15,7 +15,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RbacSystem.API", "src\RbacS
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{78887096-C36F-4C46-9E1E-646CC312E179}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RbacSystem.Tests", "tests\RbacSystem.Tests\RbacSystem.Tests.csproj", "{3B0A0902-0C47-4D2D-9386-8ACEC960A1C2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RbacSystem.Tests", "Tests\RbacSystem.Tests\RbacSystem.Tests.csproj", "{3B0A0902-0C47-4D2D-9386-8ACEC960A1C2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
