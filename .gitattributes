@@ -1,0 +1,30 @@
+# Normalize line endings across platforms.
+#
+# .editorconfig requires `end_of_line = lf`, but Git for Windows defaults to
+# core.autocrlf=true and checks files out as CRLF. `dotnet format
+# --verify-no-changes` inspects the working copy, so without this file every
+# Windows contributor sees hundreds of spurious ENDOFLINE errors on code they
+# never touched, and line-ending churn leaks into unrelated diffs.
+#
+# Text files are stored as LF in the repository and checked out as LF on every
+# platform, which matches both .editorconfig and the CI formatting check.
+* text=auto eol=lf
+
+# Binaries must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.dll binary
+*.exe binary
+*.pfx binary
+*.snk binary
+
+# Windows-only scripts need CRLF to run reliably.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

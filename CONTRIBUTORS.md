@@ -133,6 +133,26 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
     dotnet format
 ```
 
+    #### Line endings
+
+    `.editorconfig` requires LF, and `.gitattributes` (`* text=auto eol=lf`) makes
+    Git check every text file out as LF on Windows, macOS, and Linux alike. You do
+    not need to change `core.autocrlf`.
+
+    If you cloned **before** `.gitattributes` was added, your working copy is still
+    CRLF and `dotnet format --verify-no-changes` will report hundreds of `ENDOFLINE`
+    errors on files you never touched. Refresh the working copy once:
+
+```bash
+    git rm --cached -r .
+    git reset --hard
+```
+
+    That rewrites the working copy using the new rules. It changes no committed
+    content — the repository already stores LF — so `git diff` stays empty
+    afterwards. Commit any real work first, since `reset --hard` discards
+    uncommitted changes.
+
 ---
 
 8. ### Commit Message Convention:
