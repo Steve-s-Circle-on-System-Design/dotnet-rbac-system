@@ -107,6 +107,7 @@ Configure local values from the repository root with:
 ```bash
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=rbac_system;Username=postgres;Password=yourpassword" --project src/RbacSystem.API
 dotnet user-secrets set "Jwt:Key" "your-local-dev-secret-at-least-32-chars" --project src/RbacSystem.API
+dotnet user-secrets set "Jwt:RefreshTokenHashSecret" "another-local-dev-secret-at-least-32-chars" --project src/RbacSystem.API
 dotnet user-secrets set "Cloudinary:CloudName" "your-cloud-name" --project src/RbacSystem.API
 dotnet user-secrets set "Cloudinary:ApiKey" "your-api-key" --project src/RbacSystem.API
 dotnet user-secrets set "Cloudinary:ApiSecret" "your-api-secret" --project src/RbacSystem.API
@@ -133,6 +134,20 @@ variable, using `__` as the section separator (for example
 | `Auth:RefreshTokenExpiryDays` | `7` | Refresh-token lifespan. |
 | `Auth:EmailVerificationTokenExpiryHours` | `24` | Email-verification token lifespan. |
 | `Auth:OtpExpiryMinutes` | `10` | Magic-login OTP lifespan. |
+| `Jwt:Issuer` | `RbacSystem` | Issuer stamped on, and validated in, access tokens. |
+| `Jwt:Audience` | `RbacSystemUsers` | Audience stamped on, and validated in, access tokens. |
+
+`Security:PasswordHashing:WorkFactor`, `Auth:AccessTokenExpiryMinutes`,
+`Auth:RefreshTokenExpiryDays`, `Jwt:Issuer` and `Jwt:Audience` are read today. The
+remaining `Auth:*` lifespans are the agreed keys for the features that consume them.
+
+Two settings are **secrets** and must never appear in `appsettings.json`. Both are
+required, and the API refuses to start without them:
+
+| Secret | Purpose |
+|---|---|
+| `Jwt:Key` | Signs and validates access tokens. Minimum 32 characters — HMAC-SHA256 rejects anything shorter. |
+| `Jwt:RefreshTokenHashSecret` | Keys the HMAC applied to refresh tokens before storage, so a leaked database cannot be matched against intercepted tokens. Minimum 32 characters. |
 
 Only `Security:PasswordHashing:WorkFactor` is read today, by the registration
 feature. The `Auth:*` lifespans are the agreed keys for the token-issuing features
@@ -171,7 +186,9 @@ dotnet format Rbac-System.sln
 dotnet run --project src/RbacSystem.API
 ```
 
-Swagger UI loads at `http://localhost:<port>` (root URL) in Development mode.
+Swagger UI loads at `http://localhost:<port>/swagger` in Development mode, which is
+the URL `launchSettings.json` opens on startup. Use the **Authorize** button with the
+`accessToken` returned by `/api/auth/login` to call protected endpoints.
 
 ### Apply EF Core Migrations
 
@@ -217,6 +234,34 @@ special character.
 | `201` | `{ "message": "Sign Up successful, verify Email." }` | Account created |
 | `400` | `ProblemDetails` with detail `Email is already registered` | Address already in use |
 | `400` | `ValidationProblemDetails` | Email malformed or password fails the policy |
+
+### `POST /api/auth/login`
+
+Authenticates a credential pair and starts a session. Request:
+
+```json
+{ "email": "ada@example.com", "password": "Str0ng!Passw0rd" }
+```
+
+Only presence and email format are validated. The registration password policy is
+deliberately not applied, so a wrong password returns `401` rather than a `400` that
+would disclose the policy.
+
+| Status | Body | When |
+|---|---|---|
+| `200` | `{ "accessToken", "refreshToken", "tokenType": "Bearer", "expiresIn": 900 }` | Authenticated |
+| `401` | `ProblemDetails`, detail `Invalid email or password` | Unknown email **or** wrong password — identical for both |
+| `403` | detail `Please verify your email to continue` | Email not verified |
+| `403` | detail `Account locked due to multiple failed attempts. Try again later.` | Lockout active |
+| `400` | `ValidationProblemDetails` | Email missing or malformed |
+
+The access token is a JWT carrying `sub`, `email`, `role`, `sid`, `jti` and
+`token_version`, expiring after `Auth:AccessTokenExpiryMinutes`. `sid` is the token
+family — the session identifier that refresh-token rotation will rotate within.
+
+The refresh token is 48 bytes of cryptographic randomness, opaque to clients, valid
+for `Auth:RefreshTokenExpiryDays`. Only its HMAC is stored; the raw value is never
+persisted or logged.
 
 ### Remaining endpoints
 

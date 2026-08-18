@@ -30,10 +30,42 @@ internal sealed class FakeUserRepository : IUserRepository
     /// <summary>Email addresses seen by <see cref="EmailExistsAsync"/>.</summary>
     public List<string> EmailExistsArguments { get; } = [];
 
+    /// <summary>Users returned by <see cref="GetByEmailAsync"/>, keyed by email.</summary>
+    private readonly Dictionary<string, User> usersByEmail = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Number of times <see cref="SaveChangesAsync"/> was called.</summary>
+    public int SaveChangesCallCount { get; private set; }
+
+    /// <summary>Email addresses seen by <see cref="GetByEmailAsync"/>.</summary>
+    public List<string> GetByEmailArguments { get; } = [];
+
     /// <summary>Seeds an already-registered address.</summary>
     public void SeedExistingEmail(string email)
     {
         _ = existingEmails.Add(email);
+    }
+
+    /// <summary>Seeds a full user record retrievable by email.</summary>
+    public void SeedUser(User user)
+    {
+        _ = existingEmails.Add(user.Email);
+        usersByEmail[user.Email] = user;
+    }
+
+    /// <inheritdoc />
+    public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        GetByEmailArguments.Add(email);
+
+        return Task.FromResult(usersByEmail.TryGetValue(email, out User? user) ? user : null);
+    }
+
+    /// <inheritdoc />
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        SaveChangesCallCount++;
+
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />

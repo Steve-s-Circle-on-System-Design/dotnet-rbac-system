@@ -23,6 +23,20 @@ public sealed class UserRepository(AppDbContext context) : IUserRepository
     }
 
     /// <inheritdoc />
+    public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        // Tracked, because the login flow updates the last-login fields on the
+        // returned entity. users.email is citext, so the match is case-insensitive.
+        return await context.Users.FirstOrDefaultAsync(user => user.Email == email, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        _ = await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<bool> TryAddAsync(User user, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(user);

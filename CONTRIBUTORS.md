@@ -44,8 +44,13 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
     dotnet user-secrets set "Kestrel:Port" "5000" --project src/RbacSystem.API
 
     #### JWT Configuration Secrets
-    dotnet user-secrets set "Jwt:Key" "your_super_secret_access_key" --project src/RbacSystem.API
+    dotnet user-secrets set "Jwt:Key" "your_super_secret_access_key_at_least_32_chars" --project src/RbacSystem.API
+    dotnet user-secrets set "Jwt:RefreshTokenHashSecret" "another_secret_at_least_32_chars_long" --project src/RbacSystem.API
     dotnet user-secrets set "Jwt:EmailVerificationSecret" "your_email_verification_secret_key" --project src/RbacSystem.API
+
+    `Jwt:Key` and `Jwt:RefreshTokenHashSecret` are both required and must be at
+    least 32 characters. The API validates them at startup and refuses to start
+    otherwise, rather than failing on the first login.
 
     #### Non-secret tunables — do NOT put these in user secrets
 

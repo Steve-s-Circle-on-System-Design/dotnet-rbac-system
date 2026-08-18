@@ -29,8 +29,21 @@ public static class DependencyInjection
         _ = services.Configure<PasswordHashingOptions>(
             configuration.GetSection(PasswordHashingOptions.SectionName));
 
+        // The API marks these ValidateOnStart, which turns a missing or too-short
+        // secret into a startup failure instead of a first-login failure.
+        _ = services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        _ = services.AddOptions<AuthTokenOptions>()
+            .Bind(configuration.GetSection(AuthTokenOptions.SectionName))
+            .ValidateDataAnnotations();
+
         _ = services.AddScoped<IUserRepository, UserRepository>();
+        _ = services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         _ = services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
+        _ = services.AddSingleton<RefreshTokenHasher>();
+        _ = services.AddScoped<ITokenService, JwtTokenService>();
         _ = services.AddScoped<IUserRegisteredEventPublisher, LoggingUserRegisteredEventPublisher>();
 
         return services;

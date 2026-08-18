@@ -27,4 +27,18 @@ public interface IUserRepository
     /// <param name="cancellationToken">Token used to cancel the operation.</param>
     /// <returns><see langword="true"/> when the user was stored.</returns>
     Task<bool> TryAddAsync(User user, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Loads the user registered against the supplied email address.
+    /// </summary>
+    /// <param name="email">A normalized (trimmed, lowercase) email address.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <returns>The user, or <see langword="null"/> when the address is not registered.</returns>
+    Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Persists pending changes to tracked users.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }
