@@ -33,7 +33,8 @@ public class LoginServiceTests
         bool verified = true,
         DateTime? lockoutEnd = null,
         string? passwordHash = storedHash,
-        string email = knownEmail)
+        string email = knownEmail,
+        UserStatus? status = null)
     {
         User user = new()
         {
@@ -41,7 +42,7 @@ public class LoginServiceTests
             Name = "ada",
             PasswordHash = passwordHash,
             Role = UserRole.User,
-            Status = verified ? UserStatus.Active : UserStatus.PendingVerification,
+            Status = status ?? (verified ? UserStatus.Active : UserStatus.PendingVerification),
             EmailVerifiedAt = verified ? now.AddDays(-1) : null,
             LockoutEnd = lockoutEnd
         };
@@ -247,6 +248,63 @@ public class LoginServiceTests
         Assert.Equal(2, tokenService.Issued.Count);
         Assert.NotEqual(tokenService.Issued[0].TokenFamily, tokenService.Issued[1].TokenFamily);
         Assert.All(tokenService.Issued, entry => Assert.False(string.IsNullOrWhiteSpace(entry.TokenFamily)));
+    }
+
+    [Theory]
+    [InlineData(UserStatus.Inactive)]
+    [InlineData(UserStatus.Suspended)]
+    public async Task LoginAsync_RejectsBlockedAccount(UserStatus status)
+    {
+        _ = SeedUser(status: status);
+
+        LoginResult result = await CreateService().LoginAsync(Request());
+
+        Assert.Equal(LoginOutcome.AccountNotActive, result.Outcome);
+        Assert.Null(result.Response);
+        Assert.Empty(tokenService.Issued);
+    }
+
+    [Fact]
+    public async Task LoginAsync_AllowsAnActiveAccount()
+    {
+        _ = SeedUser(status: UserStatus.Active);
+
+        Assert.Equal(LoginOutcome.Success, (await CreateService().LoginAsync(Request())).Outcome);
+    }
+
+    [Fact]
+    public async Task LoginAsync_ChecksStatusAfterPassword()
+    {
+        // A wrong password against a suspended account must look like any other bad
+        // credential, or the status becomes an enumeration signal for free.
+        _ = SeedUser(status: UserStatus.Suspended);
+        passwordHasher.VerifyResult = false;
+
+        LoginResult result = await CreateService().LoginAsync(Request(password: "WrongPassword!1"));
+
+        Assert.Equal(LoginOutcome.InvalidCredentials, result.Outcome);
+    }
+
+    [Fact]
+    public async Task LoginAsync_DoesNotPersistOrIssueTokens_ForABlockedAccount()
+    {
+        _ = SeedUser(status: UserStatus.Suspended);
+
+        _ = await CreateService().LoginAsync(Request());
+
+        Assert.Equal(0, userRepository.SaveChangesCallCount);
+        Assert.Empty(tokenService.Issued);
+    }
+
+    [Fact]
+    public async Task LoginAsync_TreatsAMissingUserAsInvalidCredentials_WhichIsHowSoftDeletedUsersArrive()
+    {
+        // The global query filter keeps soft-deleted rows out of the lookup, so the
+        // service sees them exactly as it sees an address that was never registered.
+        LoginResult result = await CreateService().LoginAsync(Request("deleted@example.com"));
+
+        Assert.Equal(LoginOutcome.InvalidCredentials, result.Outcome);
+        Assert.Empty(tokenService.Issued);
     }
 
     [Fact]

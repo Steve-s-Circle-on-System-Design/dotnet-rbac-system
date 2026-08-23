@@ -90,6 +90,13 @@ public sealed class AuthController(
                 detail: "Account locked due to multiple failed attempts. Try again later.",
                 statusCode: StatusCodes.Status403Forbidden),
 
+            // Covers both deactivated and suspended accounts with one message, so the
+            // response does not disclose which administrative action was taken.
+            LoginOutcome.AccountNotActive => Problem(
+                title: "Login failed",
+                detail: "This account is not active",
+                statusCode: StatusCodes.Status403Forbidden),
+
             // InvalidCredentials covers both an unregistered address and a bad
             // password: the response must be identical for the two so neither can be
             // told apart. Any future outcome falls back to the same safe answer.

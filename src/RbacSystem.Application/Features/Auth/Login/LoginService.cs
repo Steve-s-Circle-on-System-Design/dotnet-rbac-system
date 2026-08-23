@@ -3,6 +3,7 @@ using RbacSystem.Application.Interfaces.Repositories;
 using RbacSystem.Application.Interfaces.Services;
 using RbacSystem.Domain.Common;
 using RbacSystem.Domain.Entities;
+using RbacSystem.Domain.Enums;
 
 namespace RbacSystem.Application.Features.Auth.Login;
 
@@ -55,6 +56,19 @@ public sealed class LoginService(
         {
             return LoginResult.Failed(LoginOutcome.EmailNotVerified);
         }
+
+        // Checked after the password for the same reason as the verification gate:
+        // only a caller who has already proved they know the password learns that an
+        // account is blocked. PendingVerification is deliberately absent — new
+        // registrations carry that status until email verification promotes them, so
+        // rejecting it here would lock out every account created so far.
+        if (user.Status is UserStatus.Inactive or UserStatus.Suspended)
+        {
+            return LoginResult.Failed(LoginOutcome.AccountNotActive);
+        }
+
+        // Soft-deleted users never reach this point: a global query filter keeps them
+        // out of the lookup entirely, so they fail as though the address is unknown.
 
         user.LastLoginAt = now;
         user.LastLoginIp = ipAddress;

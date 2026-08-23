@@ -28,6 +28,11 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
         builder.Property(token => token.IpAddress).HasColumnName("ip_address").HasColumnType("inet");
         builder.Property(token => token.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
 
+        // Matches the soft-delete filter on User. Without it EF warns that this
+        // required navigation can resolve to a filtered-out principal, and a deleted
+        // user's rows would stay queryable through this entity.
+        builder.HasQueryFilter(entity => entity.User.DeletedAt == null);
+
         builder.HasOne(token => token.User)
             .WithMany()
             .HasForeignKey(token => token.UserId)

@@ -54,6 +54,11 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.DeletedAt).HasColumnName("deleted_at").HasColumnType("timestamp with time zone");
         builder.Ignore(user => user.IsEmailVerified);
 
+        // Soft-deleted users are excluded from every query by default, so no feature
+        // has to remember to filter them out. Administrative flows that genuinely
+        // need deleted rows opt back in with IgnoreQueryFilters().
+        builder.HasQueryFilter(user => user.DeletedAt == null);
+
         builder.HasIndex(user => user.Email).IsUnique().HasDatabaseName("ux_users_email");
         builder.HasIndex(user => new { user.Provider, user.ProviderId })
             .IsUnique()

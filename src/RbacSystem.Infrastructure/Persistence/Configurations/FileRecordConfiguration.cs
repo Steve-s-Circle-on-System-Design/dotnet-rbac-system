@@ -29,6 +29,11 @@ public class FileRecordConfiguration : IEntityTypeConfiguration<FileRecord>
         builder.Property(file => file.UploadedAt).HasColumnName("uploaded_at").HasColumnType("timestamp with time zone");
         builder.Property(file => file.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone");
 
+        // Matches the soft-delete filter on User. Without it EF warns that this
+        // required navigation can resolve to a filtered-out principal, and a deleted
+        // user's rows would stay queryable through this entity.
+        builder.HasQueryFilter(entity => entity.User.DeletedAt == null);
+
         builder.HasOne(file => file.User)
             .WithMany()
             .HasForeignKey(file => file.UserId)

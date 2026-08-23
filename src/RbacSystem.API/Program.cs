@@ -66,6 +66,12 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        // Inbound mapping would rewrite the short "role" and "sub" claims to their
+        // long schema URIs during validation, leaving RoleClaimType and NameClaimType
+        // below pointing at names that no longer exist. Role checks would then fail
+        // silently, which is the worst way for authorization to break.
+        options.MapInboundClaims = false;
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -115,3 +121,15 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+/// <summary>
+/// Exposes the implicitly generated entry point so integration tests can host the
+/// real application through <c>WebApplicationFactory</c>.
+/// </summary>
+public partial class Program
+{
+    /// <summary>Prevents the compiler from emitting a default public constructor.</summary>
+    protected Program()
+    {
+    }
+}
