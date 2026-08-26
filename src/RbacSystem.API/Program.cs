@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RbacSystem.Application;
+using RbacSystem.Domain.Common;
 using RbacSystem.Infrastructure;
 using RbacSystem.Infrastructure.Configuration;
 using RbacSystem.Infrastructure.Services;
@@ -98,7 +99,9 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(AppPolicies.RequireAdmin, policy =>
+        policy.RequireRole(AppRoles.Admin));
 
 WebApplication app = builder.Build();
 
