@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using RbacSystem.Application.Common.Configuration;
 using RbacSystem.Application.Interfaces.Repositories;
 using RbacSystem.Application.Interfaces.Services;
 using RbacSystem.Infrastructure.Configuration;
@@ -39,12 +40,20 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(AuthTokenOptions.SectionName))
             .ValidateDataAnnotations();
 
+        // The lockout policy lives in the Application layer because how many failures
+        // constitute an attack is a use-case rule, but it is bound here where the
+        // configuration sources are known.
+        _ = services.AddOptions<AccountLockoutOptions>()
+            .Bind(configuration.GetSection(AccountLockoutOptions.SectionName))
+            .ValidateDataAnnotations();
+
         _ = services.AddScoped<IUserRepository, UserRepository>();
         _ = services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         _ = services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
         _ = services.AddSingleton<RefreshTokenHasher>();
         _ = services.AddScoped<ITokenService, JwtTokenService>();
         _ = services.AddScoped<IUserRegisteredEventPublisher, LoggingUserRegisteredEventPublisher>();
+        _ = services.AddScoped<IAccountLockedEventPublisher, LoggingAccountLockedEventPublisher>();
 
         return services;
     }

@@ -1,5 +1,7 @@
 using System.Net;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using RbacSystem.Application.Common.Configuration;
 using RbacSystem.Application.Features.Auth.Login;
 using RbacSystem.Domain.Entities;
 using RbacSystem.Domain.Enums;
@@ -23,10 +25,18 @@ public class LoginServiceTests
     private readonly FakePasswordHasher passwordHasher = new();
     private readonly FakeTokenService tokenService = new();
     private readonly FakeTimeProvider timeProvider = new(now);
+    private readonly RecordingAccountLockedEventPublisher lockedEvents = new();
+    private readonly AccountLockoutOptions lockoutPolicy = new() { MaxFailedAttempts = 5, DurationMinutes = 15 };
 
     private LoginService CreateService()
     {
-        return new LoginService(userRepository, passwordHasher, tokenService, timeProvider);
+        return new LoginService(
+            userRepository,
+            passwordHasher,
+            tokenService,
+            lockedEvents,
+            Options.Create(lockoutPolicy),
+            timeProvider);
     }
 
     private User SeedUser(

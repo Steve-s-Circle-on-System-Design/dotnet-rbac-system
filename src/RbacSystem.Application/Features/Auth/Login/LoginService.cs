@@ -1,4 +1,6 @@
 using System.Net;
+using Microsoft.Extensions.Options;
+using RbacSystem.Application.Common.Configuration;
 using RbacSystem.Application.Interfaces.Repositories;
 using RbacSystem.Application.Interfaces.Services;
 using RbacSystem.Domain.Common;
@@ -12,6 +14,8 @@ public sealed class LoginService(
     IUserRepository userRepository,
     IPasswordHasher passwordHasher,
     ITokenService tokenService,
+    IAccountLockedEventPublisher accountLockedEventPublisher,
+    IOptions<AccountLockoutOptions> lockoutOptions,
     TimeProvider timeProvider) : ILoginService
 {
     /// <inheritdoc />
@@ -49,6 +53,12 @@ public sealed class LoginService(
 
         if (!passwordHasher.Verify(request.Password, user.PasswordHash))
         {
+            await RecordFailedAttemptAsync(user, now, cancellationToken);
+
+            // Still InvalidCredentials even on the attempt that trips the lock: the
+            // password really was wrong, and answering "account locked" here would
+            // confirm the address exists to someone who has just guessed wrong five
+            // times. The lockout response begins on the next attempt.
             return LoginResult.Failed(LoginOutcome.InvalidCredentials);
         }
 
@@ -73,6 +83,12 @@ public sealed class LoginService(
         user.LastLoginAt = now;
         user.LastLoginIp = ipAddress;
 
+        // A successful sign-in ends the current failure sequence. This one is safe on
+        // the tracked entity rather than needing the atomic statement, because
+        // resetting to zero does not depend on the value it replaces.
+        user.FailedLoginAttempts = 0;
+        user.LockoutEnd = null;
+
         // A fresh family per login, so each session rotates independently once
         // refresh-token rotation is implemented.
         IssuedTokens tokens = await tokenService.IssueTokenPairAsync(
@@ -89,5 +105,33 @@ public sealed class LoginService(
             tokens.RefreshToken,
             "Bearer",
             tokens.AccessTokenExpiresInSeconds));
+    }
+
+    /// <summary>
+    /// Records a failed attempt and raises the alert if it started a lockout.
+    /// </summary>
+    /// <remarks>
+    /// The event fires only on the transition into a lockout, so an attacker
+    /// hammering an already locked account cannot flood the owner with alerts.
+    /// </remarks>
+    private async Task RecordFailedAttemptAsync(User user, DateTime now, CancellationToken cancellationToken)
+    {
+        AccountLockoutOptions policy = lockoutOptions.Value;
+
+        FailedLoginOutcome outcome = await userRepository.RegisterFailedLoginAsync(
+            user.Id,
+            policy.MaxFailedAttempts,
+            policy.Duration,
+            now,
+            cancellationToken);
+
+        if (!outcome.LockoutJustStarted || outcome.LockoutEnd is not { } lockedUntil)
+        {
+            return;
+        }
+
+        await accountLockedEventPublisher.PublishAsync(
+            new AccountLockedEvent(user.Id, user.Email, outcome.FailedAttempts, lockedUntil, now),
+            cancellationToken);
     }
 }

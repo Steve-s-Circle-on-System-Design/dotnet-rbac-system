@@ -246,6 +246,21 @@ chore/add-github-actions
     dotnet test
 ```
 
+    #### Database-backed tests
+
+    Some behaviour, such as the atomic failed-login counter, can only be proven
+    against a real PostgreSQL. Those tests skip themselves unless a test database is
+    configured, so `dotnet test` stays runnable without one:
+
+```bash
+    docker run -d --name rbac-test-db -e POSTGRES_PASSWORD=postgres       -e POSTGRES_DB=rbac_test -p 55433:5432 postgres:18
+    export ConnectionStrings__TestDatabase="Host=localhost;Port=55433;Database=rbac_test;Username=postgres;Password=postgres"
+    dotnet test
+```
+
+    CI always provides this, so the tests genuinely run on every pull request. If
+    `dotnet test` reports skipped tests locally, that is why.
+
     ### Run tests with coverage
 ```bash
     dotnet test --collect:"XPlat Code Coverage"
