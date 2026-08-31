@@ -134,11 +134,13 @@ variable, using `__` as the section separator (for example
 | `Auth:RefreshTokenExpiryDays` | `7` | Refresh-token lifespan. |
 | `Auth:EmailVerificationTokenExpiryHours` | `24` | Email-verification token lifespan. |
 | `Auth:OtpExpiryMinutes` | `10` | Magic-login OTP lifespan. |
+| `Auth:Lockout:MaxFailedAttempts` | `5` | Consecutive failed sign-ins that lock an account. |
+| `Auth:Lockout:DurationMinutes` | `15` | How long an account stays locked once the threshold is reached. |
 | `Jwt:Issuer` | `RbacSystem` | Issuer stamped on, and validated in, access tokens. |
 | `Jwt:Audience` | `RbacSystemUsers` | Audience stamped on, and validated in, access tokens. |
 
 `Security:PasswordHashing:WorkFactor`, `Auth:AccessTokenExpiryMinutes`,
-`Auth:RefreshTokenExpiryDays`, `Jwt:Issuer` and `Jwt:Audience` are read today. The
+`Auth:RefreshTokenExpiryDays`, the `Auth:Lockout:*` pair, `Jwt:Issuer` and `Jwt:Audience` are read today. The
 remaining `Auth:*` lifespans are the agreed keys for the features that consume them.
 
 Two settings are **secrets** and must never appear in `appsettings.json`. Both are
@@ -252,7 +254,16 @@ would disclose the policy.
 | `200` | `{ "accessToken", "refreshToken", "tokenType": "Bearer", "expiresIn": 900 }` | Authenticated |
 | `401` | `ProblemDetails`, detail `Invalid email or password` | Unknown email **or** wrong password — identical for both |
 | `403` | detail `Please verify your email to continue` | Email not verified |
-| `403` | detail `Account locked due to multiple failed attempts. Try again later.` | Lockout active |
+| `401` | detail `Invalid email or password` | Lockout active — deliberately identical to the two rows above |
+
+Five consecutive incorrect passwords lock an account for 15 minutes, both values
+configurable above. A locked account returns the **same** `401` as an unknown
+address or a wrong password, and spends the same time doing so, so the lockout
+cannot be used to confirm that an address is registered. The account owner learns
+about it from the security-alert email instead. Attempts made during a lockout are
+not counted and do not extend it, a lockout that has expired starts a fresh
+sequence rather than resuming from the count that caused it, and a successful
+sign-in clears the counter.
 | `400` | `ValidationProblemDetails` | Email missing or malformed |
 
 The access token is a JWT carrying `sub`, `email`, `role`, `sid`, `jti` and

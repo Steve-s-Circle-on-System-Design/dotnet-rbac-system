@@ -26,6 +26,23 @@ jobs:
     name: Build & test
     runs-on: ubuntu-latest
 
+    # Some behaviour cannot be proven in memory. Failed-login tracking relies on a
+    # single atomic statement, and its concurrency guarantee is only meaningful
+    # against a real server, so the suite gets one.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rbac_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -49,6 +66,11 @@ jobs:
         run: dotnet build Rbac-System.sln --configuration Release --no-restore
 
       - name: Test
+        env:
+          # Database-backed tests skip themselves when this is absent, so CI is the
+          # place that guarantees they actually run.
+          ConnectionStrings__TestDatabase: >-
+            Host=localhost;Port=5432;Database=rbac_test;Username=postgres;Password=postgres
         run: >-
           dotnet test Rbac-System.sln
           --configuration Release

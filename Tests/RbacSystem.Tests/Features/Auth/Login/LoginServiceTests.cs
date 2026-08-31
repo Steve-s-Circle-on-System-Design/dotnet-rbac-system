@@ -1,5 +1,7 @@
 using System.Net;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using RbacSystem.Application.Common.Configuration;
 using RbacSystem.Application.Features.Auth.Login;
 using RbacSystem.Domain.Entities;
 using RbacSystem.Domain.Enums;
@@ -23,10 +25,18 @@ public class LoginServiceTests
     private readonly FakePasswordHasher passwordHasher = new();
     private readonly FakeTokenService tokenService = new();
     private readonly FakeTimeProvider timeProvider = new(now);
+    private readonly RecordingAccountLockedEventPublisher lockedEvents = new();
+    private readonly AccountLockoutOptions lockoutPolicy = new() { MaxFailedAttempts = 5, DurationMinutes = 15 };
 
     private LoginService CreateService()
     {
-        return new LoginService(userRepository, passwordHasher, tokenService, timeProvider);
+        return new LoginService(
+            userRepository,
+            passwordHasher,
+            tokenService,
+            lockedEvents,
+            Options.Create(lockoutPolicy),
+            timeProvider);
     }
 
     private User SeedUser(
@@ -163,13 +173,20 @@ public class LoginServiceTests
     public async Task LoginAsync_ChecksLockoutBeforePassword()
     {
         // A locked account must not reveal whether the supplied password was right.
+        // It is still verified against the dummy hash, so the response takes the same
+        // time as any other failure, but the stored hash is never consulted and the
+        // outcome cannot depend on whether the guess was correct.
         _ = SeedUser(lockoutEnd: now.AddMinutes(5));
-        passwordHasher.VerifyResult = false;
+        passwordHasher.VerifyResult = true;
 
-        LoginResult result = await CreateService().LoginAsync(Request(password: "WrongPassword!1"));
+        LoginResult result = await CreateService().LoginAsync(Request(password: correctPassword));
 
         Assert.Equal(LoginOutcome.AccountLocked, result.Outcome);
-        Assert.Empty(passwordHasher.VerifiedPairs);
+
+        (string _, string hash) = Assert.Single(passwordHasher.VerifiedPairs);
+
+        Assert.Equal(FakePasswordHasher.DummyHashValue, hash);
+        Assert.DoesNotContain(passwordHasher.VerifiedPairs, pair => pair.Hash == storedHash);
     }
 
     [Fact]

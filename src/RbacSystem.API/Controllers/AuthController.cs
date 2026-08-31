@@ -58,8 +58,11 @@ public sealed class AuthController(
     /// <param name="cancellationToken">Token used to cancel the operation.</param>
     /// <response code="200">Authenticated; the response carries the token pair.</response>
     /// <response code="400">The payload failed validation.</response>
-    /// <response code="401">The email is not registered, or the password is incorrect.</response>
-    /// <response code="403">The account is unverified or temporarily locked.</response>
+    /// <response code="401">
+    /// The email is not registered, the password is incorrect, or the account is
+    /// temporarily locked. These are deliberately indistinguishable.
+    /// </response>
+    /// <response code="403">The account is unverified or not active.</response>
     [HttpPost("login")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
@@ -85,11 +88,6 @@ public sealed class AuthController(
                 detail: "Please verify your email to continue",
                 statusCode: StatusCodes.Status403Forbidden),
 
-            LoginOutcome.AccountLocked => Problem(
-                title: "Login failed",
-                detail: "Account locked due to multiple failed attempts. Try again later.",
-                statusCode: StatusCodes.Status403Forbidden),
-
             // Covers both deactivated and suspended accounts with one message, so the
             // response does not disclose which administrative action was taken.
             LoginOutcome.AccountNotActive => Problem(
@@ -97,10 +95,13 @@ public sealed class AuthController(
                 detail: "This account is not active",
                 statusCode: StatusCodes.Status403Forbidden),
 
-            // InvalidCredentials covers both an unregistered address and a bad
-            // password: the response must be identical for the two so neither can be
-            // told apart. Any future outcome falls back to the same safe answer.
-            LoginOutcome.InvalidCredentials or _ => Problem(
+            // InvalidCredentials and AccountLocked share one response. An
+            // unregistered address, a bad password and a locked account must be
+            // indistinguishable, or an attacker can trip a lockout deliberately and
+            // read the difference to confirm an address is registered. The account
+            // owner is told about the lockout through the security-alert email
+            // instead. Any future outcome falls back to the same safe answer.
+            LoginOutcome.InvalidCredentials or LoginOutcome.AccountLocked or _ => Problem(
                 title: "Login failed",
                 detail: "Invalid email or password",
                 statusCode: StatusCodes.Status401Unauthorized)
