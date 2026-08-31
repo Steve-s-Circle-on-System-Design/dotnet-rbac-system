@@ -1,4 +1,5 @@
 using System.Data;
+using System.Net;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -49,6 +50,29 @@ public sealed class UserRepository(AppDbContext context) : IUserRepository
           AND deleted_at IS NULL
           AND (lockout_end IS NULL OR lockout_end <= @now)
         RETURNING failed_login_attempts, lockout_end;
+        """;
+
+    /// <summary>
+    /// Clears the failure state for a successful sign-in, refusing to do so if a
+    /// lockout is active at that instant.
+    /// </summary>
+    /// <remarks>
+    /// The lockout predicate lives in the WHERE clause rather than in application
+    /// code, so the check and the write cannot be separated by a concurrent failed
+    /// attempt. Last-sign-in fields are written here too, so the login flow never
+    /// mutates the tracked entity and EF cannot flush a stale lockout value over the
+    /// top of a lock applied in between.
+    /// </remarks>
+    private const string completeSuccessfulLoginSql = """
+        UPDATE users SET
+            failed_login_attempts = 0,
+            lockout_end = NULL,
+            last_login_at = @now,
+            last_login_ip = @ip,
+            updated_at = @now
+        WHERE id = @id
+          AND deleted_at IS NULL
+          AND (lockout_end IS NULL OR lockout_end <= @now);
         """;
 
     /// <inheritdoc />
@@ -136,6 +160,53 @@ public sealed class UserRepository(AppDbContext context) : IUserRepository
             bool lockoutJustStarted = lockoutEnd is { } end && end > nowUtc;
 
             return new FailedLoginOutcome(failedAttempts, lockoutEnd, lockoutJustStarted);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> TryCompleteSuccessfulLoginAsync(
+        string userId,
+        DateTime nowUtc,
+        IPAddress? ipAddress,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        if (nowUtc.Kind != DateTimeKind.Utc)
+        {
+            throw new ArgumentException(
+                $"The current time must be UTC, but was {nowUtc.Kind}.", nameof(nowUtc));
+        }
+
+        DbConnection connection = context.Database.GetDbConnection();
+        bool shouldClose = connection.State != ConnectionState.Open;
+
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            using DbCommand command = connection.CreateCommand();
+
+            command.CommandText = completeSuccessfulLoginSql;
+            command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+
+            AddParameter(command, "id", userId);
+            AddParameter(command, "now", nowUtc);
+            AddParameter(command, "ip", (object?)ipAddress ?? DBNull.Value);
+
+            // Zero rows means a concurrent failure locked the account after it was
+            // loaded, so this sign-in must not proceed.
+            return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
         }
         finally
         {

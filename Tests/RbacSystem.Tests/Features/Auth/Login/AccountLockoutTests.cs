@@ -244,4 +244,115 @@ public class AccountLockoutTests
 
         Assert.Equal(callsAfterLock, userRepository.FailedLoginCalls.Count);
     }
+
+    [Fact]
+    public async Task ALockoutLandingDuringASuccessfulLogin_RefusesTheSignIn()
+    {
+        // The race the reviewer identified: the user is read while unlocked, a
+        // concurrent wrong password locks the account, and the successful request is
+        // still holding the stale row. It must not clear that lock or hand out tokens.
+        User user = SeedUser();
+
+        userRepository.OnCompleteSuccessfulLogin = () =>
+        {
+            user.FailedLoginAttempts = maxAttempts;
+            user.LockoutEnd = now.AddMinutes(lockoutMinutes);
+        };
+
+        LoginResult result = await AttemptAsync(correct: true);
+
+        Assert.Equal(LoginOutcome.AccountLocked, result.Outcome);
+        Assert.Null(result.Response);
+        Assert.Empty(tokenService.Issued);
+    }
+
+    [Fact]
+    public async Task ALockoutLandingDuringASuccessfulLogin_IsNotCleared()
+    {
+        User user = SeedUser();
+        DateTime lockedUntil = now.AddMinutes(lockoutMinutes);
+
+        userRepository.OnCompleteSuccessfulLogin = () =>
+        {
+            user.FailedLoginAttempts = maxAttempts;
+            user.LockoutEnd = lockedUntil;
+        };
+
+        _ = await AttemptAsync(correct: true);
+
+        // Previously the tracked entity would have written lockout_end back to null.
+        Assert.Equal(lockedUntil, user.LockoutEnd);
+        Assert.Equal(maxAttempts, user.FailedLoginAttempts);
+    }
+
+    [Fact]
+    public async Task TheResetIsCheckedBeforeAnyTokenIsIssued()
+    {
+        // Ordering matters: issuing first and checking afterwards would leak a usable
+        // token for an account that turned out to be locked.
+        _ = SeedUser();
+
+        _ = await AttemptAsync(correct: true);
+
+        Assert.Equal(1, userRepository.CompleteSuccessfulLoginCallCount);
+        _ = Assert.Single(tokenService.Issued);
+    }
+
+    [Fact]
+    public async Task ASuccessfulLogin_RecordsLastSignInThroughTheConditionalWrite()
+    {
+        User user = SeedUser();
+        user.FailedLoginAttempts = 3;
+
+        _ = await AttemptAsync(correct: true);
+
+        Assert.Equal(0, user.FailedLoginAttempts);
+        Assert.Null(user.LockoutEnd);
+        Assert.Equal(now, user.LastLoginAt);
+    }
+
+    [Fact]
+    public async Task ALockedAccount_StillSpendsAHashVerification()
+    {
+        // Same response is not enough on its own: returning early would make a locked
+        // account answer in milliseconds while an unknown address and a wrong password
+        // each cost a full BCrypt verification, and that gap re-opens the enumeration
+        // signal by timing. The verify is against the dummy hash, so it also cannot
+        // reveal whether the submitted password was correct.
+        _ = SeedUser();
+        await FailTimesAsync(maxAttempts);
+
+        int verificationsBefore = passwordHasher.VerifiedPairs.Count;
+
+        LoginResult result = await AttemptAsync(correct: true);
+
+        Assert.Equal(LoginOutcome.AccountLocked, result.Outcome);
+
+        (string _, string hash) = passwordHasher.VerifiedPairs[verificationsBefore];
+
+        Assert.Equal(FakePasswordHasher.DummyHashValue, hash);
+    }
+
+    [Fact]
+    public async Task EveryFailurePath_SpendsExactlyOneHashVerification()
+    {
+        // Unknown address, wrong password and locked account must all cost the same.
+        AccountLockoutTests unknown = new();
+        _ = await unknown.CreateService().LoginAsync(
+            new LoginRequest { Email = "nobody@example.com", Password = "WrongPassword!1" });
+
+        AccountLockoutTests wrong = new();
+        _ = wrong.SeedUser();
+        _ = await wrong.AttemptAsync(correct: false);
+
+        AccountLockoutTests locked = new();
+        _ = locked.SeedUser();
+        await locked.FailTimesAsync(maxAttempts);
+        int before = locked.passwordHasher.VerifiedPairs.Count;
+        _ = await locked.AttemptAsync(correct: true);
+
+        _ = Assert.Single(unknown.passwordHasher.VerifiedPairs);
+        _ = Assert.Single(wrong.passwordHasher.VerifiedPairs);
+        Assert.Equal(1, locked.passwordHasher.VerifiedPairs.Count - before);
+    }
 }

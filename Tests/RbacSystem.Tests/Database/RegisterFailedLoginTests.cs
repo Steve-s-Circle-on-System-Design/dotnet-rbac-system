@@ -157,4 +157,111 @@ public sealed class RegisterFailedLoginTests : IClassFixture<PostgresFixture>
         _ = await Assert.ThrowsAsync<ArgumentException>(
             () => RegisterAsync(user.Id, DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Local)));
     }
+
+    private static async Task<bool> CompleteAsync(string userId, DateTime nowUtc)
+    {
+        await using AppDbContext context = PostgresFixture.CreateContext();
+
+        return await new UserRepository(context)
+            .TryCompleteSuccessfulLoginAsync(userId, nowUtc, null);
+    }
+
+    [RequiresPostgresFact]
+    public async Task ASuccessfulLogin_ClearsTheFailureStateWhenNotLocked()
+    {
+        User user = await PostgresFixture.SeedUserAsync(failedAttempts: 3);
+        DateTime now = DateTime.UtcNow;
+
+        Assert.True(await CompleteAsync(user.Id, now));
+
+        User stored = await PostgresFixture.ReloadAsync(user.Id);
+
+        Assert.Equal(0, stored.FailedLoginAttempts);
+        Assert.Null(stored.LockoutEnd);
+        _ = Assert.NotNull(stored.LastLoginAt);
+    }
+
+    [RequiresPostgresFact]
+    public async Task ASuccessfulLogin_IsRefusedWhileLocked_AndLeavesTheLockIntact()
+    {
+        DateTime now = DateTime.UtcNow;
+        DateTime lockedUntil = now.AddMinutes(10);
+        User user = await PostgresFixture.SeedUserAsync(failedAttempts: maxAttempts, lockoutEnd: lockedUntil);
+
+        Assert.False(await CompleteAsync(user.Id, now));
+
+        User stored = await PostgresFixture.ReloadAsync(user.Id);
+
+        // The whole point: a correct password arriving during a lockout must not
+        // clear it. Writing the reset through the change tracker would have.
+        _ = Assert.NotNull(stored.LockoutEnd);
+        Assert.InRange(stored.LockoutEnd.Value, lockedUntil.AddSeconds(-2), lockedUntil.AddSeconds(2));
+        Assert.Equal(maxAttempts, stored.FailedLoginAttempts);
+    }
+
+    [RequiresPostgresFact]
+    public async Task ASuccessfulLogin_IsAllowedOnceTheLockoutHasExpired()
+    {
+        DateTime now = DateTime.UtcNow;
+        User user = await PostgresFixture.SeedUserAsync(
+            failedAttempts: maxAttempts,
+            lockoutEnd: now.AddMinutes(-1));
+
+        Assert.True(await CompleteAsync(user.Id, now));
+        Assert.Null((await PostgresFixture.ReloadAsync(user.Id)).LockoutEnd);
+    }
+
+    [RequiresPostgresFact]
+    public async Task CorrectAndIncorrectLogins_RunningConcurrently_NeverCancelALockout()
+    {
+        // Requested in review. One correct-password completion races a burst of wrong
+        // passwords. Whatever the interleaving, the end state must be coherent: either
+        // the reset won and there is no lock, or the lock won and the reset was
+        // refused. A lock must never be left cleared by a stale successful request.
+        const int rounds = 25;
+
+        for (int round = 0; round < rounds; round++)
+        {
+            User user = await PostgresFixture.SeedUserAsync(failedAttempts: maxAttempts - 1);
+            DateTime now = DateTime.UtcNow;
+
+            // The results are captured into plainly typed locals rather than held in
+            // Task-typed ones: whether Task.Run makes its generic argument "apparent"
+            // is judged differently by different SDK patch versions, so one analyzer
+            // demands var there and another demands the explicit type.
+            bool resetApplied = false;
+            FailedLoginOutcome? failureOutcome = null;
+
+            await Task.WhenAll(
+                Task.Run(async () => { resetApplied = await CompleteAsync(user.Id, now); }),
+                Task.Run(async () => { failureOutcome = await RegisterAsync(user.Id, now); }));
+
+            Assert.NotNull(failureOutcome);
+
+            User stored = await PostgresFixture.ReloadAsync(user.Id);
+
+            if (failureOutcome.LockoutJustStarted && !resetApplied)
+            {
+                // The failure locked the account and the reset was correctly refused.
+                _ = Assert.NotNull(stored.LockoutEnd);
+                Assert.Equal(maxAttempts, stored.FailedLoginAttempts);
+                continue;
+            }
+
+            if (resetApplied && !failureOutcome.LockoutJustStarted)
+            {
+                // The reset landed first, so the later failure counted from zero and
+                // could not reach the threshold on its own.
+                Assert.True(stored.FailedLoginAttempts <= 1);
+                Assert.Null(stored.LockoutEnd);
+                continue;
+            }
+
+            // Both succeeding would mean a lock was applied and then silently
+            // cancelled by the stale successful request, which is the bug under test.
+            Assert.Fail(
+                $"Round {round}: reset={resetApplied}, lockStarted={failureOutcome.LockoutJustStarted}, " +
+                $"stored attempts={stored.FailedLoginAttempts}, lockoutEnd={stored.LockoutEnd:o}");
+        }
+    }
 }

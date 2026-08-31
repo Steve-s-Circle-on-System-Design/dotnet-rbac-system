@@ -1,3 +1,4 @@
+using System.Net;
 using RbacSystem.Domain.Entities;
 
 namespace RbacSystem.Application.Interfaces.Repositories;
@@ -63,5 +64,31 @@ public interface IUserRepository
         int maxFailedAttempts,
         TimeSpan lockoutDuration,
         DateTime nowUtc,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears the failed-login state for a successful sign-in, but only if the
+    /// account is not locked in the database at that moment.
+    /// </summary>
+    /// <remarks>
+    /// Reading the user, then writing the reset through the change tracker, is not
+    /// safe: a concurrent failed attempt can apply a lockout in between, and the
+    /// tracked entity would then overwrite <c>lockout_end</c> with the stale null it
+    /// was loaded with, silently cancelling the lock. This performs the check and the
+    /// write in one statement and reports whether it applied, so the caller can
+    /// refuse the sign-in instead of issuing tokens against a locked account.
+    /// </remarks>
+    /// <param name="userId">The account signing in.</param>
+    /// <param name="nowUtc">Current UTC time, also recorded as the last sign-in.</param>
+    /// <param name="ipAddress">Caller address, recorded as the last sign-in address.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <returns>
+    /// <see langword="false"/> when the account was locked concurrently and nothing
+    /// was written.
+    /// </returns>
+    Task<bool> TryCompleteSuccessfulLoginAsync(
+        string userId,
+        DateTime nowUtc,
+        IPAddress? ipAddress,
         CancellationToken cancellationToken = default);
 }

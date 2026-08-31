@@ -1,3 +1,4 @@
+using System.Net;
 using RbacSystem.Application.Interfaces.Repositories;
 using RbacSystem.Domain.Entities;
 
@@ -96,6 +97,49 @@ internal sealed class FakeUserRepository : IUserRepository
         bool justStarted = user.LockoutEnd is { } end && end > nowUtc;
 
         return Task.FromResult(new FailedLoginOutcome(user.FailedLoginAttempts, user.LockoutEnd, justStarted));
+    }
+
+
+    /// <summary>
+    /// Runs at the start of <see cref="TryCompleteSuccessfulLoginAsync"/>, so a test
+    /// can simulate a concurrent failed attempt landing between the user being read
+    /// and the successful sign-in being committed.
+    /// </summary>
+    public Action? OnCompleteSuccessfulLogin { get; set; }
+
+    /// <summary>Number of times <see cref="TryCompleteSuccessfulLoginAsync"/> was called.</summary>
+    public int CompleteSuccessfulLoginCallCount { get; private set; }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Mirrors the real statement: the reset is refused outright when a lockout is
+    /// active, rather than blindly clearing it.
+    /// </remarks>
+    public Task<bool> TryCompleteSuccessfulLoginAsync(
+        string userId,
+        DateTime nowUtc,
+        IPAddress? ipAddress,
+        CancellationToken cancellationToken = default)
+    {
+        CompleteSuccessfulLoginCallCount++;
+        OnCompleteSuccessfulLogin?.Invoke();
+
+        if (!usersById.TryGetValue(userId, out User? user))
+        {
+            return Task.FromResult(false);
+        }
+
+        if (user.LockoutEnd is { } active && active > nowUtc)
+        {
+            return Task.FromResult(false);
+        }
+
+        user.FailedLoginAttempts = 0;
+        user.LockoutEnd = null;
+        user.LastLoginAt = nowUtc;
+        user.LastLoginIp = ipAddress;
+
+        return Task.FromResult(true);
     }
 
     /// <inheritdoc />

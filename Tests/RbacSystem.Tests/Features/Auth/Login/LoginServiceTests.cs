@@ -173,13 +173,20 @@ public class LoginServiceTests
     public async Task LoginAsync_ChecksLockoutBeforePassword()
     {
         // A locked account must not reveal whether the supplied password was right.
+        // It is still verified against the dummy hash, so the response takes the same
+        // time as any other failure, but the stored hash is never consulted and the
+        // outcome cannot depend on whether the guess was correct.
         _ = SeedUser(lockoutEnd: now.AddMinutes(5));
-        passwordHasher.VerifyResult = false;
+        passwordHasher.VerifyResult = true;
 
-        LoginResult result = await CreateService().LoginAsync(Request(password: "WrongPassword!1"));
+        LoginResult result = await CreateService().LoginAsync(Request(password: correctPassword));
 
         Assert.Equal(LoginOutcome.AccountLocked, result.Outcome);
-        Assert.Empty(passwordHasher.VerifiedPairs);
+
+        (string _, string hash) = Assert.Single(passwordHasher.VerifiedPairs);
+
+        Assert.Equal(FakePasswordHasher.DummyHashValue, hash);
+        Assert.DoesNotContain(passwordHasher.VerifiedPairs, pair => pair.Hash == storedHash);
     }
 
     [Fact]

@@ -254,14 +254,16 @@ would disclose the policy.
 | `200` | `{ "accessToken", "refreshToken", "tokenType": "Bearer", "expiresIn": 900 }` | Authenticated |
 | `401` | `ProblemDetails`, detail `Invalid email or password` | Unknown email **or** wrong password — identical for both |
 | `403` | detail `Please verify your email to continue` | Email not verified |
-| `403` | detail `Account locked due to multiple failed attempts. Try again later.` | Lockout active |
+| `401` | detail `Invalid email or password` | Lockout active — deliberately identical to the two rows above |
 
 Five consecutive incorrect passwords lock an account for 15 minutes, both values
-configurable above. The attempt that trips the lock still returns `401`, since the
-password genuinely was wrong; the `403` begins on the next attempt. Attempts made
-during a lockout are not counted and do not extend it, and a lockout that has
-expired starts a fresh sequence rather than resuming from the count that caused it.
-A successful sign-in clears the counter.
+configurable above. A locked account returns the **same** `401` as an unknown
+address or a wrong password, and spends the same time doing so, so the lockout
+cannot be used to confirm that an address is registered. The account owner learns
+about it from the security-alert email instead. Attempts made during a lockout are
+not counted and do not extend it, a lockout that has expired starts a fresh
+sequence rather than resuming from the count that caused it, and a successful
+sign-in clears the counter.
 | `400` | `ValidationProblemDetails` | Email missing or malformed |
 
 The access token is a JWT carrying `sub`, `email`, `role`, `sid`, `jti` and
