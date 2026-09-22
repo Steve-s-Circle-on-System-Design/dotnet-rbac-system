@@ -50,7 +50,7 @@ public static class DependencyInjection
         _ = services.AddScoped<IUserRepository, UserRepository>();
         _ = services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         _ = services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
-        _ = services.AddSingleton<RefreshTokenHasher>();
+        _ = services.AddSingleton<IRefreshTokenHasher, RefreshTokenHasher>();
         _ = services.AddScoped<ITokenService, JwtTokenService>();
         _ = services.AddScoped<IUserRegisteredEventPublisher, LoggingUserRegisteredEventPublisher>();
         _ = services.AddScoped<IAccountLockedEventPublisher, LoggingAccountLockedEventPublisher>();

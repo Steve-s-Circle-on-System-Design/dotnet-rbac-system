@@ -19,7 +19,7 @@ public sealed class JwtTokenService(
     IOptions<JwtOptions> jwtOptions,
     IOptions<AuthTokenOptions> authTokenOptions,
     IRefreshTokenRepository refreshTokenRepository,
-    RefreshTokenHasher refreshTokenHasher,
+    IRefreshTokenHasher refreshTokenHasher,
     TimeProvider timeProvider) : ITokenService
 {
     /// <summary>
