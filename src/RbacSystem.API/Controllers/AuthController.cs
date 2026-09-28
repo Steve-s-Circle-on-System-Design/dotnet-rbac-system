@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RbacSystem.Application.Features.Auth.Login;
+using RbacSystem.Application.Features.Auth.Logout;
+using RbacSystem.Application.Features.Auth.Refresh;
 using RbacSystem.Application.Features.Auth.Register;
 
 namespace RbacSystem.API.Controllers;
@@ -13,7 +15,9 @@ namespace RbacSystem.API.Controllers;
 [Produces("application/json")]
 public sealed class AuthController(
     IRegisterUserService registerUserService,
-    ILoginService loginService) : ControllerBase
+    ILoginService loginService,
+    IRefreshService refreshService,
+    ILogoutService logoutService) : ControllerBase
 {
     /// <summary>
     /// Registers a new user with an email address and password.
@@ -106,5 +110,62 @@ public sealed class AuthController(
                 detail: "Invalid email or password",
                 statusCode: StatusCodes.Status401Unauthorized)
         };
+    }
+
+    /// <summary>
+    /// Consumes a valid refresh token and returns its single-use replacement pair.
+    /// </summary>
+    /// <remarks>
+    /// The access token may already be expired, so this endpoint is anonymous. The
+    /// submitted refresh token is the session credential. Every rejection shares
+    /// one response to avoid exposing token or account state.
+    /// </remarks>
+    /// <param name="request">The current session's raw refresh token.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <response code="200">The submitted token was rotated successfully.</response>
+    /// <response code="400">The payload failed validation.</response>
+    /// <response code="401">The refresh token or its account cannot be used.</response>
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(RefreshResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Refresh(
+        [FromBody] RefreshRequest request,
+        CancellationToken cancellationToken)
+    {
+        RefreshResult result = await refreshService.RefreshAsync(
+            request,
+            Request.Headers.UserAgent.ToString(),
+            HttpContext.Connection.RemoteIpAddress,
+            cancellationToken);
+
+        return result.Outcome == RefreshOutcome.Success
+            ? Ok(result.Response)
+            : Problem(
+                title: "Refresh failed",
+                detail: "Invalid refresh token",
+                statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    /// <summary>Revokes the refresh-token session held by the caller.</summary>
+    /// <remarks>
+    /// Repeated, expired, unknown and already-revoked tokens all receive the same
+    /// response, so logout remains idempotent and reveals no session state.
+    /// </remarks>
+    /// <param name="request">The current session's raw refresh token.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <response code="204">Logout was accepted, whether or not the session still existed.</response>
+    /// <response code="400">The payload failed validation.</response>
+    [HttpPost("logout")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Logout(
+        [FromBody] LogoutRequest request,
+        CancellationToken cancellationToken)
+    {
+        await logoutService.LogoutAsync(request, cancellationToken);
+        return NoContent();
     }
 }

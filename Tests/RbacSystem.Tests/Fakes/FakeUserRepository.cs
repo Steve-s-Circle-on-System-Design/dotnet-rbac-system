@@ -40,6 +40,9 @@ internal sealed class FakeUserRepository : IUserRepository
     /// <summary>Email addresses seen by <see cref="GetByEmailAsync"/>.</summary>
     public List<string> GetByEmailArguments { get; } = [];
 
+    /// <summary>User IDs seen by <see cref="GetSecurityStateByIdAsync"/>.</summary>
+    public List<(string UserId, CancellationToken Token)> SecurityStateArguments { get; } = [];
+
     /// <summary>Seeds an already-registered address.</summary>
     public void SeedExistingEmail(string email)
     {
@@ -148,6 +151,20 @@ internal sealed class FakeUserRepository : IUserRepository
         GetByEmailArguments.Add(email);
 
         return Task.FromResult(usersByEmail.TryGetValue(email, out User? user) ? user : null);
+    }
+
+    /// <inheritdoc />
+    public Task<UserSecurityState?> GetSecurityStateByIdAsync(
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        SecurityStateArguments.Add((userId, cancellationToken));
+
+        UserSecurityState? state = usersById.TryGetValue(userId, out User? user)
+            ? new UserSecurityState(user.TokenVersion, user.Status)
+            : null;
+
+        return Task.FromResult(state);
     }
 
     /// <inheritdoc />

@@ -72,4 +72,22 @@ public interface IRefreshTokenRepository
         DateTime nowUtc,
         string reason,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Atomically revokes every unrevoked refresh-token record for a user and
+    /// increments the user's token version once.
+    /// </summary>
+    /// <remarks>
+    /// Used when refresh-token reuse indicates possible token theft. The reused
+    /// historical token is marked revoked along with active sessions, making repeat
+    /// submissions idempotent. Keeping both changes in one transaction prevents
+    /// refresh tokens from being revoked while previously issued access tokens
+    /// remain valid under the old token version.
+    /// </remarks>
+    /// <returns>True when the user existed and the security transition committed.</returns>
+    Task<bool> RevokeAllSessionsAndIncrementTokenVersionAsync(
+        string userId,
+        DateTime nowUtc,
+        string reason,
+        CancellationToken cancellationToken = default);
 }

@@ -9,7 +9,6 @@ using RbacSystem.Domain.Entities;
 using RbacSystem.Domain.Enums;
 using RbacSystem.Infrastructure.Configuration;
 using RbacSystem.Infrastructure.Services;
-using RbacSystem.Tests.Fakes;
 
 namespace RbacSystem.Tests.Integration;
 
@@ -25,7 +24,7 @@ namespace RbacSystem.Tests.Integration;
 public sealed class AuthenticationPipelineTests(WebApplicationFactoryFixture fixture)
     : IClassFixture<WebApplicationFactoryFixture>
 {
-    private static async Task<string> IssueTokenAsync(UserRole role)
+    private static Task<string> IssueTokenAsync(UserRole role, int tokenVersion = 0)
     {
         JwtOptions jwt = new()
         {
@@ -38,7 +37,6 @@ public sealed class AuthenticationPipelineTests(WebApplicationFactoryFixture fix
         JwtTokenService tokenService = new(
             Options.Create(jwt),
             Options.Create(new AuthTokenOptions()),
-            new FakeRefreshTokenRepository(),
             new RefreshTokenHasher(Options.Create(jwt)),
             new FakeTimeProvider(DateTimeOffset.UtcNow));
 
@@ -47,16 +45,17 @@ public sealed class AuthenticationPipelineTests(WebApplicationFactoryFixture fix
             Email = "ada@example.com",
             Name = "ada",
             PasswordHash = "$2a$12$hash",
-            Role = role
+            Role = role,
+            TokenVersion = tokenVersion
         };
 
-        IssuedTokens tokens = await tokenService.IssueTokenPairAsync(
+        IssuedTokens tokens = tokenService.IssueTokenPair(
             user,
             "11111111-1111-1111-1111-111111111111",
             null,
-            null);
+            null).Tokens;
 
-        return tokens.AccessToken;
+        return Task.FromResult(tokens.AccessToken);
     }
 
     private HttpClient CreateClient(string? accessToken = null)
@@ -94,6 +93,15 @@ public sealed class AuthenticationPipelineTests(WebApplicationFactoryFixture fix
             .GetAsync("/test-probe/authenticated");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProtectedEndpoint_Rejects_WhenTokenVersionIsNoLongerCurrent()
+    {
+        HttpResponseMessage response = await CreateClient(await IssueTokenAsync(UserRole.User, tokenVersion: 1))
+            .GetAsync("/test-probe/authenticated");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]

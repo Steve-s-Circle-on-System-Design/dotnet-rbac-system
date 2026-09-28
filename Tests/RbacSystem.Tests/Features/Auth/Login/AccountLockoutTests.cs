@@ -21,6 +21,7 @@ public class AccountLockoutTests
     private static readonly DateTime now = new(2026, 8, 25, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly FakeUserRepository userRepository = new();
+    private readonly FakeRefreshTokenRepository refreshTokenRepository = new();
     private readonly FakePasswordHasher passwordHasher = new();
     private readonly FakeTokenService tokenService = new();
     private readonly RecordingAccountLockedEventPublisher lockedEvents = new();
@@ -30,6 +31,7 @@ public class AccountLockoutTests
     {
         return new LoginService(
             userRepository,
+            refreshTokenRepository,
             passwordHasher,
             tokenService,
             lockedEvents,

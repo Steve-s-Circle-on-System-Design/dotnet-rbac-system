@@ -62,6 +62,10 @@ public sealed class RefreshTokenRepository(AppDbContext context) : IRefreshToken
                     token.Id == currentTokenId &&
                     token.UserId == replacement.UserId &&
                     token.TokenFamily == replacement.TokenFamily &&
+                    // Re-enable once email verification promotes registrations to
+                    // Active. Login currently permits a verified user whose status
+                    // remains PendingVerification, so rotation must match that rule.
+                    // token.User.Status == UserStatus.Active &&
                     token.UsedAt == null &&
                     token.RevokedAt == null &&
                     token.ExpiresAt > nowUtc)
@@ -134,6 +138,67 @@ public sealed class RefreshTokenRepository(AppDbContext context) : IRefreshToken
                     .SetProperty(token => token.RevokedAt, nowUtc)
                     .SetProperty(token => token.RevokeReason, reason),
                 cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> RevokeAllSessionsAndIncrementTokenVersionAsync(
+        string userId,
+        DateTime nowUtc,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        ValidateRevocation(nowUtc, reason);
+
+        await using IDbContextTransaction transaction =
+            await context.Database.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            // Include the already-used token that revealed the reuse. Marking every
+            // unrevoked record makes this security response idempotent: a repeated
+            // submission finds that token revoked and cannot keep incrementing the
+            // user's token version after they sign in again.
+            int revoked = await context.RefreshTokens
+                .IgnoreQueryFilters()
+                .Where(token =>
+                    token.UserId == userId &&
+                    token.RevokedAt == null)
+                .ExecuteUpdateAsync(
+                    updates => updates
+                        .SetProperty(token => token.RevokedAt, nowUtc)
+                        .SetProperty(token => token.RevokeReason, reason),
+                    cancellationToken);
+
+            if (revoked == 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
+
+            int versionUpdated = await context.Users
+                .IgnoreQueryFilters()
+                .Where(user => user.Id == userId)
+                .ExecuteUpdateAsync(
+                    updates => updates
+                        .SetProperty(user => user.TokenVersion, user => user.TokenVersion + 1)
+                        .SetProperty(user => user.UpdatedAt, nowUtc),
+                    cancellationToken);
+
+            if (versionUpdated != 1)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            throw;
+        }
     }
 
     private static void ValidateRevocation(DateTime nowUtc, string reason)

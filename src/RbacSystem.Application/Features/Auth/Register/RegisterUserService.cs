@@ -22,7 +22,7 @@ public sealed class RegisterUserService(
 
         string email = NormalizeEmail(request.Email);
 
-         if (await userRepository.EmailExistsAsync(email, cancellationToken))
+        if (await userRepository.EmailExistsAsync(email, cancellationToken))
         {
             return RegisterResult.DuplicateEmail;
         }

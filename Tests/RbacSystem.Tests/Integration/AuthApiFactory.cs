@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using RbacSystem.Application.Features.Auth.AccessToken;
 
 namespace RbacSystem.Tests.Integration;
 
@@ -27,6 +30,15 @@ internal sealed class AuthApiFactory : WebApplicationFactory<Program>
     {
         _ = builder.UseEnvironment("Development");
 
+        // WebApplicationFactory must not inherit the Windows Event Log provider:
+        // ordinary test processes cannot write to that protected system log, and
+        // its exception would mask the actual API response under test.
+        _ = builder.ConfigureLogging(logging =>
+        {
+            _ = logging.ClearProviders();
+            _ = logging.AddDebug();
+        });
+
         // UseSetting rather than ConfigureAppConfiguration: the API reads its
         // connection string and JWT settings while the host is being built, which
         // happens before an added configuration source would be visible.
@@ -40,9 +52,29 @@ internal sealed class AuthApiFactory : WebApplicationFactory<Program>
 
         _ = builder.ConfigureServices(services =>
         {
+            // These pipeline tests focus on JWT parsing and role-claim behavior.
+            // Their users are not stored in PostgreSQL, so current-state validation
+            // is replaced here; dedicated validator tests cover that separate rule.
+            _ = services.RemoveAll<IAccessTokenValidator>();
+            _ = services.AddSingleton<IAccessTokenValidator, TestAccessTokenValidator>();
+
             // Makes the test-only ProbeController discoverable by MapControllers
             // without adding any endpoint to the API project itself.
             _ = services.AddControllers().AddApplicationPart(typeof(ProbeController).Assembly);
         });
+    }
+
+    private sealed class TestAccessTokenValidator : IAccessTokenValidator
+    {
+        public Task<bool> IsValidAsync(
+            string userId,
+            int tokenVersion,
+            CancellationToken cancellationToken = default)
+        {
+            // Synthetic users in these tests represent a current database version
+            // of zero. A different JWT version proves the bearer event enforces the
+            // result returned by the application validator.
+            return Task.FromResult(tokenVersion == 0);
+        }
     }
 }

@@ -12,6 +12,18 @@ internal sealed class FakeRefreshTokenRepository : IRefreshTokenRepository
     /// <summary>Tokens passed to <see cref="AddAsync"/>, in order.</summary>
     public List<RefreshToken> Added { get; } = [];
 
+    /// <summary>Forces the next rotation to lose its conditional-update race.</summary>
+    public bool RejectNextRotation { get; set; }
+
+    /// <summary>Reuse-response calls received by the repository.</summary>
+    public List<(string UserId, DateTime NowUtc, string Reason)> ReuseResponses { get; } = [];
+
+    /// <summary>Single-session revocation calls received by the repository.</summary>
+    public List<(string TokenHash, DateTime NowUtc, string Reason, CancellationToken Token)> RevokeSessionCalls
+    {
+        get;
+    } = [];
+
     /// <inheritdoc />
     public Task AddAsync(RefreshToken refreshToken, CancellationToken cancellationToken = default)
     {
@@ -37,6 +49,12 @@ internal sealed class FakeRefreshTokenRepository : IRefreshTokenRepository
         DateTime nowUtc,
         CancellationToken cancellationToken = default)
     {
+        if (RejectNextRotation)
+        {
+            RejectNextRotation = false;
+            return Task.FromResult(false);
+        }
+
         RefreshToken? current = Added.SingleOrDefault(token => token.Id == currentTokenId);
 
         if (current is null ||
@@ -62,6 +80,7 @@ internal sealed class FakeRefreshTokenRepository : IRefreshTokenRepository
         string reason,
         CancellationToken cancellationToken = default)
     {
+        RevokeSessionCalls.Add((tokenHash, nowUtc, reason, cancellationToken));
         RefreshToken? token = Added.SingleOrDefault(token => token.TokenHash == tokenHash);
 
         if (token is null ||
@@ -85,13 +104,12 @@ internal sealed class FakeRefreshTokenRepository : IRefreshTokenRepository
         string reason,
         CancellationToken cancellationToken = default)
     {
-        List<RefreshToken> active = Added
+        List<RefreshToken> active = [.. Added
             .Where(token =>
                 token.UserId == userId &&
                 token.UsedAt is null &&
                 token.RevokedAt is null &&
-                token.ExpiresAt > nowUtc)
-            .ToList();
+                token.ExpiresAt > nowUtc)];
 
         foreach (RefreshToken token in active)
         {
@@ -100,5 +118,42 @@ internal sealed class FakeRefreshTokenRepository : IRefreshTokenRepository
         }
 
         return Task.FromResult(active.Count);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> RevokeAllSessionsAndIncrementTokenVersionAsync(
+        string userId,
+        DateTime nowUtc,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        ReuseResponses.Add((userId, nowUtc, reason));
+
+        List<RefreshToken> userTokens = [.. Added.Where(token => token.UserId == userId)];
+
+        List<RefreshToken> unrevoked = [.. userTokens.Where(token => token.RevokedAt is null)];
+
+        if (unrevoked.Count == 0)
+        {
+            return Task.FromResult(false);
+        }
+
+        foreach (RefreshToken token in unrevoked)
+        {
+            token.RevokedAt = nowUtc;
+            token.RevokeReason = reason;
+        }
+
+        User? user = userTokens.Select(token => token.User).FirstOrDefault(candidate => candidate is not null);
+
+        if (user is null)
+        {
+            return Task.FromResult(false);
+        }
+
+        user.TokenVersion++;
+        user.UpdatedAt = nowUtc;
+
+        return Task.FromResult(true);
     }
 }
