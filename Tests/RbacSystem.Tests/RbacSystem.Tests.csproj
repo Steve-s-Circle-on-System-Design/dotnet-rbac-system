@@ -30,10 +30,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\RbacSystem.API\RbacSystem.API.csproj" />
     <ProjectReference Include="..\..\src\RbacSystem.Application\RbacSystem.Application.csproj" />
     <ProjectReference Include="..\..\src\RbacSystem.Domain\RbacSystem.Domain.csproj" />
     <ProjectReference Include="..\..\src\RbacSystem.Infrastructure\RbacSystem.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\src\RbacSystem.API\RbacSystem.API.csproj" />
   </ItemGroup>
 
 </Project>

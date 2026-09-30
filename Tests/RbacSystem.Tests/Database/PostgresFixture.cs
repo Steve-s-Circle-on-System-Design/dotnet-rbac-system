@@ -103,6 +103,16 @@ public sealed class PostgresFixture : IAsyncLifetime
 }
 
 /// <summary>
+/// Shares one PostgreSQL fixture across every database-backed test class.
+/// This prevents separate classes from applying migrations concurrently when the
+/// test database is empty.
+/// </summary>
+[CollectionDefinition("PostgreSQL database", DisableParallelization = true)]
+public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>
+{
+}
+
+/// <summary>
 /// A fact that skips itself when no test database is configured.
 /// </summary>
 public sealed class RequiresPostgresFactAttribute : FactAttribute

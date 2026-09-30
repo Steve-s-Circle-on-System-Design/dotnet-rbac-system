@@ -8,15 +8,14 @@ namespace RbacSystem.Tests.Database;
 /// <summary>
 /// PostgreSQL coverage for the atomic response to refresh-token reuse.
 /// </summary>
-public sealed class RefreshTokenRevocationTests(PostgresFixture fixture)
-    : IClassFixture<PostgresFixture>
+[Collection("PostgreSQL database")]
+public sealed class RefreshTokenRevocationTests
 {
     private static readonly DateTime now = new(2026, 9, 23, 12, 0, 0, DateTimeKind.Utc);
 
     [RequiresPostgresFact]
     public async Task ConcurrentReuseResponses_RevokeOnceAndIncrementTokenVersionOnce()
     {
-        _ = fixture;
         User user = await PostgresFixture.SeedUserAsync();
         string tokenId = await SeedRefreshTokenAsync(user.Id);
 

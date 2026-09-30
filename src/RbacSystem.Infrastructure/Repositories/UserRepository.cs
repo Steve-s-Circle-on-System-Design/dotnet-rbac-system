@@ -250,7 +250,7 @@ public sealed class UserRepository(AppDbContext context) : IUserRepository
 
         try
         {
-             _ = await context.SaveChangesAsync(cancellationToken);
+            _ = await context.SaveChangesAsync(cancellationToken);
             return true;
         }
         catch (DbUpdateException exception) when (IsEmailUniqueViolation(exception))

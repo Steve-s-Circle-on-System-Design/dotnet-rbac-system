@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using RbacSystem.API.Authorization;
 using RbacSystem.Application;
 using RbacSystem.Application.Common.Configuration;
 using RbacSystem.Application.Features.Auth.AccessToken;
@@ -139,7 +140,9 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(AppPolicies.RequireAdmin, policy =>
+        policy.RequireRole(AppRoles.Admin));
 
 WebApplication app = builder.Build();
 

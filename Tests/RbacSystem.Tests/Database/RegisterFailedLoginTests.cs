@@ -13,7 +13,8 @@ namespace RbacSystem.Tests.Database;
 /// which no in-memory fake can demonstrate. These tests are the evidence for the
 /// acceptance criteria rather than a restatement of the unit tests.
 /// </remarks>
-public sealed class RegisterFailedLoginTests : IClassFixture<PostgresFixture>
+[Collection("PostgreSQL database")]
+public sealed class RegisterFailedLoginTests
 {
     private const int maxAttempts = 5;
 
