@@ -22,6 +22,7 @@ public class LoginServiceTests
     private static readonly DateTime now = new(2026, 8, 15, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly FakeUserRepository userRepository = new();
+    private readonly FakeRefreshTokenRepository refreshTokenRepository = new();
     private readonly FakePasswordHasher passwordHasher = new();
     private readonly FakeTokenService tokenService = new();
     private readonly FakeTimeProvider timeProvider = new(now);
@@ -32,6 +33,7 @@ public class LoginServiceTests
     {
         return new LoginService(
             userRepository,
+            refreshTokenRepository,
             passwordHasher,
             tokenService,
             lockedEvents,
@@ -80,6 +82,7 @@ public class LoginServiceTests
         Assert.Equal("refresh-token", result.Response.RefreshToken);
         Assert.Equal("Bearer", result.Response.TokenType);
         Assert.Equal(900, result.Response.ExpiresIn);
+        _ = Assert.Single(refreshTokenRepository.Added);
     }
 
     [Fact]
@@ -235,6 +238,7 @@ public class LoginServiceTests
         _ = await CreateService().LoginAsync(Request());
 
         Assert.Equal(0, userRepository.SaveChangesCallCount);
+        Assert.Empty(refreshTokenRepository.Added);
     }
 
     [Fact]

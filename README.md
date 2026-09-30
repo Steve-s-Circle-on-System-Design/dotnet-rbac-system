@@ -5,9 +5,10 @@ Role-Based Access Control (RBAC) system built with ASP.NET Core and Entity Frame
 This is the C#/.NET implementation of the team's multi-language RBAC project. Sibling implementations exist in Python (FastAPI), Go, and TypeScript. See the API Contract section below for how this service is expected to line up with those.
 
 > **Current branch status:** the solution contains the Clean Architecture and
-> PostgreSQL/EF Core foundation. The seven-table domain model, entity mappings,
-> and initial migration are implemented. Authentication use cases, repositories,
-> and endpoints will be added with their related features.
+> PostgreSQL/EF Core foundation. Registration, credential login, account lockout,
+> role-based authorization, refresh-token rotation, logout, and access-token
+> revocation checks are implemented. The remaining authentication and supporting
+> features will be added through their related issues.
 
 ## Key Deliverables
 
@@ -151,10 +152,11 @@ required, and the API refuses to start without them:
 | `Jwt:Key` | Signs and validates access tokens. Minimum 32 characters — HMAC-SHA256 rejects anything shorter. |
 | `Jwt:RefreshTokenHashSecret` | Keys the HMAC applied to refresh tokens before storage, so a leaked database cannot be matched against intercepted tokens. Minimum 32 characters. |
 
-Only `Security:PasswordHashing:WorkFactor` is read today, by the registration
-feature. The `Auth:*` lifespans are the agreed keys for the token-issuing features
-and are consumed as those land — they are listed here so that no lifespan is ever
-written as a literal in code.
+`Security:PasswordHashing:WorkFactor`, the access- and refresh-token lifespans,
+the lockout settings, and the JWT issuer and audience are currently consumed by
+the application. The remaining `Auth:*` lifespans are agreed keys for features
+that have not landed yet, so those values do not have to be written as literals
+when the features are implemented.
 
 Secrets — connection strings, JWT signing keys, OAuth client secrets, and email or
 Cloudinary credentials — never belong in `appsettings.json`. Use `dotnet user-secrets`
@@ -255,6 +257,7 @@ would disclose the policy.
 | `401` | `ProblemDetails`, detail `Invalid email or password` | Unknown email **or** wrong password — identical for both |
 | `403` | detail `Please verify your email to continue` | Email not verified |
 | `401` | detail `Invalid email or password` | Lockout active — deliberately identical to the two rows above |
+| `400` | `ValidationProblemDetails` | Email missing or malformed |
 
 Five consecutive incorrect passwords lock an account for 15 minutes, both values
 configurable above. A locked account returns the **same** `401` as an unknown
@@ -264,22 +267,73 @@ about it from the security-alert email instead. Attempts made during a lockout a
 not counted and do not extend it, a lockout that has expired starts a fresh
 sequence rather than resuming from the count that caused it, and a successful
 sign-in clears the counter.
-| `400` | `ValidationProblemDetails` | Email missing or malformed |
 
 The access token is a JWT carrying `sub`, `email`, `role`, `sid`, `jti` and
 `token_version`, expiring after `Auth:AccessTokenExpiryMinutes`. `sid` is the token
-family — the session identifier that refresh-token rotation will rotate within.
+family: the session identifier retained as a refresh token is rotated.
 
 The refresh token is 48 bytes of cryptographic randomness, opaque to clients, valid
 for `Auth:RefreshTokenExpiryDays`. Only its HMAC is stored; the raw value is never
 persisted or logged.
+
+### `POST /api/auth/refresh`
+
+Replaces a valid refresh token with a new access/refresh-token pair. The client
+sends the raw refresh token received from login or the previous refresh response:
+
+```json
+{ "refreshToken": "opaque-token-value" }
+```
+
+| Status | Body | When |
+|---|---|---|
+| `200` | `{ "accessToken", "refreshToken", "tokenType": "Bearer", "expiresIn": 900 }` | The token was valid and rotated successfully |
+| `400` | `ValidationProblemDetails` | The request body is invalid |
+| `401` | Generic `ProblemDetails` | The token is unknown, expired, revoked, already used, or cannot be rotated |
+
+Rotation is atomic: the current token is marked used and its replacement is
+inserted in one database transaction. Two simultaneous requests cannot both rotate
+the same token successfully. The replacement remains in the same token family and
+references the token it replaced.
+
+Submitting a token that was already used or rotated is treated as possible token
+theft. All refresh-token sessions for that user are revoked and the user's
+`TokenVersion` is incremented, invalidating access tokens issued with the previous
+version. Raw refresh tokens are never stored or logged.
+
+### `POST /api/auth/logout`
+
+Revokes the session identified by the submitted refresh token:
+
+```json
+{ "refreshToken": "opaque-token-value" }
+```
+
+The endpoint returns `204 No Content` for an active, unknown, expired, or already
+revoked token. This makes logout idempotent: retrying the same request remains safe.
+Normal logout revokes only that session, so sessions on the user's other devices
+remain active.
+
+### Access-token revocation checks
+
+Signature, issuer, audience, and expiry validation prove that a JWT was issued by
+this application and has not naturally expired. After those checks, the API also
+loads the user's current security state from PostgreSQL and compares the JWT's
+`token_version` claim with the user's current `TokenVersion`.
+
+If the versions differ, or the account is unavailable or blocked, authentication
+fails even when the JWT is otherwise genuine. This is how a security event such as
+refresh-token reuse can invalidate already-issued access tokens before their
+15-minute expiry. PostgreSQL is currently the source of truth for this check on
+protected requests. A carefully invalidated Redis cache may be added later if
+measurement shows that the database lookup is a performance bottleneck.
 
 ### Remaining endpoints
 
 The rest of the endpoints, request/response shapes, and status codes are still being
 finalized with the other language teams. This section should eventually also cover:
 
-- Auth endpoints (register, login, Google OAuth callback, magic OTP request/verify, email verification, password reset, refresh token)
+- Auth endpoints still outstanding (Google OAuth callback, magic OTP request/verify, email verification, and password reset)
 - User and Admin role-protected endpoints
 - File upload endpoints
 - Admin dashboard endpoints (if built)

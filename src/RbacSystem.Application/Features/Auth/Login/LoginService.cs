@@ -12,6 +12,7 @@ namespace RbacSystem.Application.Features.Auth.Login;
 /// <inheritdoc cref="ILoginService" />
 public sealed class LoginService(
     IUserRepository userRepository,
+    IRefreshTokenRepository refreshTokenRepository,
     IPasswordHasher passwordHasher,
     ITokenService tokenService,
     IAccountLockedEventPublisher accountLockedEventPublisher,
@@ -100,14 +101,17 @@ public sealed class LoginService(
 
         // A fresh family per login, so each session rotates independently once
         // refresh-token rotation is implemented.
-        IssuedTokens tokens = await tokenService.IssueTokenPairAsync(
+        PreparedTokenPair prepared = tokenService.IssueTokenPair(
             user,
             EntityId.New(),
             userAgent,
-            ipAddress,
-            cancellationToken: cancellationToken);
+            ipAddress);
+
+        await refreshTokenRepository.AddAsync(prepared.RefreshTokenRecord, cancellationToken);
 
         await userRepository.SaveChangesAsync(cancellationToken);
+
+        IssuedTokens tokens = prepared.Tokens;
 
         return LoginResult.Success(new LoginResponse(
             tokens.AccessToken,

@@ -38,6 +38,17 @@ public interface IUserRepository
     Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Loads only the current state needed to validate an access token.
+    /// </summary>
+    /// <remarks>
+    /// The global user query filter remains active, so a soft-deleted account is
+    /// returned as missing and cannot continue using an existing access token.
+    /// </remarks>
+    Task<UserSecurityState?> GetSecurityStateByIdAsync(
+        string userId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Persists pending changes to tracked users.
     /// </summary>
     /// <param name="cancellationToken">Token used to cancel the operation.</param>

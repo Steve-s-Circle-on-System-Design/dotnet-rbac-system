@@ -4,7 +4,7 @@ using RbacSystem.Domain.Entities;
 namespace RbacSystem.Application.Interfaces.Services;
 
 /// <summary>
-/// Issues access and refresh token pairs.
+/// Prepares access and refresh token pairs without persisting them.
 /// </summary>
 /// <remarks>
 /// Shared by login and, once refresh-token rotation is implemented, by the refresh
@@ -14,8 +14,8 @@ namespace RbacSystem.Application.Interfaces.Services;
 public interface ITokenService
 {
     /// <summary>
-    /// Signs an access token and issues a matching refresh token, persisting only
-    /// the refresh token's hash.
+    /// Signs an access token and prepares a matching refresh-token record containing
+    /// only the refresh token's hash. The calling use case decides how to persist it.
     /// </summary>
     /// <param name="user">The authenticated user.</param>
     /// <param name="tokenFamily">
@@ -27,13 +27,14 @@ public interface ITokenService
     /// <param name="rotatedFromId">
     /// Identifier of the refresh token being replaced, when rotating. Null on login.
     /// </param>
-    /// <param name="cancellationToken">Token used to cancel the operation.</param>
-    /// <returns>The issued pair, including the raw refresh token, which is never stored.</returns>
-    Task<IssuedTokens> IssueTokenPairAsync(
+    /// <returns>
+    /// Client-facing token values and the hashed refresh-token record that the
+    /// calling use case must persist.
+    /// </returns>
+    PreparedTokenPair IssueTokenPair(
         User user,
         string tokenFamily,
         string? userAgent,
         IPAddress? ipAddress,
-        string? rotatedFromId = null,
-        CancellationToken cancellationToken = default);
+        string? rotatedFromId = null);
 }

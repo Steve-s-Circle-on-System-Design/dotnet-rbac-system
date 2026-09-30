@@ -1,5 +1,6 @@
 using System.Net;
 using RbacSystem.Application.Interfaces.Services;
+using RbacSystem.Domain.Common;
 using RbacSystem.Domain.Entities;
 
 namespace RbacSystem.Tests.Fakes;
@@ -17,16 +18,27 @@ internal sealed class FakeTokenService : ITokenService
     public IssuedTokens Result { get; set; } = new("access-token", "refresh-token", 900);
 
     /// <inheritdoc />
-    public Task<IssuedTokens> IssueTokenPairAsync(
+    public PreparedTokenPair IssueTokenPair(
         User user,
         string tokenFamily,
         string? userAgent,
         IPAddress? ipAddress,
-        string? rotatedFromId = null,
-        CancellationToken cancellationToken = default)
+        string? rotatedFromId = null)
     {
         Issued.Add((user, tokenFamily, userAgent, ipAddress, rotatedFromId));
 
-        return Task.FromResult(Result);
+        return new PreparedTokenPair(
+            Result,
+            new RefreshToken
+            {
+                Id = EntityId.New(),
+                UserId = user.Id,
+                TokenHash = "prepared-refresh-token-hash",
+                TokenFamily = tokenFamily,
+                RotatedFromId = rotatedFromId,
+                UserAgent = userAgent,
+                IpAddress = ipAddress,
+                ExpiresAt = DateTime.UtcNow.AddDays(7)
+            });
     }
 }

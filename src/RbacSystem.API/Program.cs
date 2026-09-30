@@ -6,6 +6,7 @@ using Microsoft.OpenApi.Models;
 using RbacSystem.API.Authorization;
 using RbacSystem.Application;
 using RbacSystem.Application.Common.Configuration;
+using RbacSystem.Application.Features.Auth.AccessToken;
 using RbacSystem.Infrastructure;
 using RbacSystem.Infrastructure.Configuration;
 using RbacSystem.Infrastructure.Services;
@@ -98,6 +99,44 @@ builder.Services
             // Without this the handler allows five minutes of grace, so a token
             // advertised as lasting 15 minutes would really be accepted for 20.
             ClockSkew = TimeSpan.Zero
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                string? userId = context.Principal?
+                    .FindFirst(JwtRegisteredClaimNames.Sub)?
+                    .Value;
+                string? versionValue = context.Principal?
+                    .FindFirst(JwtTokenService.TokenVersionClaim)?
+                    .Value;
+
+                if (string.IsNullOrWhiteSpace(userId) ||
+                    !int.TryParse(
+                        versionValue,
+                        System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out int tokenVersion) ||
+                    tokenVersion < 0)
+                {
+                    context.Fail("The access token has invalid security claims.");
+                    return;
+                }
+
+                IAccessTokenValidator validator = context.HttpContext.RequestServices
+                    .GetRequiredService<IAccessTokenValidator>();
+
+                bool isCurrent = await validator.IsValidAsync(
+                    userId,
+                    tokenVersion,
+                    context.HttpContext.RequestAborted);
+
+                if (!isCurrent)
+                {
+                    context.Fail("The access token is no longer valid.");
+                }
+            }
         };
     });
 

@@ -5,7 +5,6 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
-using RbacSystem.Application.Interfaces.Repositories;
 using RbacSystem.Application.Interfaces.Services;
 using RbacSystem.Domain.Common;
 using RbacSystem.Domain.Entities;
@@ -18,8 +17,7 @@ namespace RbacSystem.Infrastructure.Services;
 public sealed class JwtTokenService(
     IOptions<JwtOptions> jwtOptions,
     IOptions<AuthTokenOptions> authTokenOptions,
-    IRefreshTokenRepository refreshTokenRepository,
-    RefreshTokenHasher refreshTokenHasher,
+    IRefreshTokenHasher refreshTokenHasher,
     TimeProvider timeProvider) : ITokenService
 {
     /// <summary>
@@ -42,13 +40,12 @@ public sealed class JwtTokenService(
     public const string RoleClaim = "role";
 
     /// <inheritdoc />
-    public async Task<IssuedTokens> IssueTokenPairAsync(
+    public PreparedTokenPair IssueTokenPair(
         User user,
         string tokenFamily,
         string? userAgent,
         IPAddress? ipAddress,
-        string? rotatedFromId = null,
-        CancellationToken cancellationToken = default)
+        string? rotatedFromId = null)
     {
         ArgumentNullException.ThrowIfNull(user);
         ArgumentException.ThrowIfNullOrWhiteSpace(tokenFamily);
@@ -73,12 +70,12 @@ public sealed class JwtTokenService(
             CreatedAt = issuedAt
         };
 
-        await refreshTokenRepository.AddAsync(refreshToken, cancellationToken);
-
-        return new IssuedTokens(
-            accessToken,
-            rawRefreshToken,
-            lifetimes.AccessTokenExpiryMinutes * 60);
+        return new PreparedTokenPair(
+            new IssuedTokens(
+                accessToken,
+                rawRefreshToken,
+                lifetimes.AccessTokenExpiryMinutes * 60),
+            refreshToken);
     }
 
     private static string CreateAccessToken(

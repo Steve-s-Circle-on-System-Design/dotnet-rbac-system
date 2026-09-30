@@ -91,6 +91,20 @@ public sealed class UserRepository(AppDbContext context) : IUserRepository
     }
 
     /// <inheritdoc />
+    public Task<UserSecurityState?> GetSecurityStateByIdAsync(
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        return context.Users
+            .AsNoTracking()
+            .Where(user => user.Id == userId)
+            .Select(user => new UserSecurityState(user.TokenVersion, user.Status))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         _ = await context.SaveChangesAsync(cancellationToken);

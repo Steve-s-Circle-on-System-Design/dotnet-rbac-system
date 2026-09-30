@@ -11,14 +11,13 @@ using RbacSystem.Domain.Entities;
 using RbacSystem.Domain.Enums;
 using RbacSystem.Infrastructure.Configuration;
 using RbacSystem.Infrastructure.Services;
-using RbacSystem.Tests.Fakes;
 
 namespace RbacSystem.Tests.Integration;
 
 public class AdminAuthorizationTests(WebApplicationFactoryFixture fixture)
     : IClassFixture<WebApplicationFactoryFixture>
 {
-    private static async Task<string> IssueTokenAsync(UserRole role)
+    private static string IssueToken(UserRole role)
     {
         JwtOptions jwt = new()
         {
@@ -31,7 +30,6 @@ public class AdminAuthorizationTests(WebApplicationFactoryFixture fixture)
         JwtTokenService tokenService = new(
             Options.Create(jwt),
             Options.Create(new AuthTokenOptions()),
-            new FakeRefreshTokenRepository(),
             new RefreshTokenHasher(Options.Create(jwt)),
             new FakeTimeProvider(DateTimeOffset.UtcNow));
 
@@ -43,13 +41,13 @@ public class AdminAuthorizationTests(WebApplicationFactoryFixture fixture)
             Role = role
         };
 
-        IssuedTokens tokens = await tokenService.IssueTokenPairAsync(
+        PreparedTokenPair prepared = tokenService.IssueTokenPair(
             user,
             "11111111-1111-1111-1111-111111111111",
             null,
             null);
 
-        return tokens.AccessToken;
+        return prepared.Tokens.AccessToken;
     }
 
     private static string CreateTokenWithoutRole()
@@ -67,7 +65,7 @@ public class AdminAuthorizationTests(WebApplicationFactoryFixture fixture)
             [JwtRegisteredClaimNames.Email] = "norole@example.com",
             [JwtRegisteredClaimNames.Sid] = EntityId.New(),
             [JwtRegisteredClaimNames.Jti] = EntityId.New(),
-            [JwtTokenService.TokenVersionClaim] = "1"
+            [JwtTokenService.TokenVersionClaim] = "0"
         };
 
         SecurityTokenDescriptor descriptor = new()
@@ -120,7 +118,7 @@ public class AdminAuthorizationTests(WebApplicationFactoryFixture fixture)
     public async Task GetAdminEndpoint_WithNonAdminRole_ShouldReturn403Forbidden()
     {
         // Arrange
-        string token = await IssueTokenAsync(UserRole.User);
+        string token = IssueToken(UserRole.User);
 
         // Act
         HttpResponseMessage response = await CreateClient(token).GetAsync("/api/admin");
@@ -146,7 +144,7 @@ public class AdminAuthorizationTests(WebApplicationFactoryFixture fixture)
     public async Task GetAdminEndpoint_WithAdminRole_ShouldReturn200Ok()
     {
         // Arrange
-        string token = await IssueTokenAsync(UserRole.Admin);
+        string token = IssueToken(UserRole.Admin);
 
         // Act
         HttpResponseMessage response = await CreateClient(token).GetAsync("/api/admin");

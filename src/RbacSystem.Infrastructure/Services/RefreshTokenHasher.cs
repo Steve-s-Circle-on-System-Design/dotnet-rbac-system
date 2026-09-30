@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
+using RbacSystem.Application.Interfaces.Services;
 using RbacSystem.Infrastructure.Configuration;
 
 namespace RbacSystem.Infrastructure.Services;
@@ -14,7 +15,7 @@ namespace RbacSystem.Infrastructure.Services;
 /// secret is used rather than a bare SHA-256 digest so that a stolen database alone
 /// cannot be matched against intercepted tokens without also holding the secret.
 /// </remarks>
-public sealed class RefreshTokenHasher
+public sealed class RefreshTokenHasher : IRefreshTokenHasher
 {
     private readonly byte[] secret;
 

@@ -10,12 +10,11 @@ using RbacSystem.Domain.Entities;
 using RbacSystem.Domain.Enums;
 using RbacSystem.Infrastructure.Configuration;
 using RbacSystem.Infrastructure.Services;
-using RbacSystem.Tests.Fakes;
 
 namespace RbacSystem.Tests.Infrastructure;
 
 /// <summary>
-/// Tests access-token claims, refresh-token generation, and what is persisted.
+/// Tests access-token claims and prepared refresh-token records.
 /// </summary>
 public class JwtTokenServiceTests
 {
@@ -25,7 +24,6 @@ public class JwtTokenServiceTests
 
     private static readonly DateTime now = new(2026, 8, 15, 12, 0, 0, DateTimeKind.Utc);
 
-    private readonly FakeRefreshTokenRepository refreshTokens = new();
     private readonly FakeTimeProvider timeProvider = new(now);
 
     private static JwtOptions Jwt()
@@ -50,7 +48,6 @@ public class JwtTokenServiceTests
         return new JwtTokenService(
             Options.Create(Jwt()),
             Options.Create(lifetimes),
-            refreshTokens,
             new RefreshTokenHasher(Options.Create(Jwt())),
             timeProvider);
     }
@@ -92,11 +89,11 @@ public class JwtTokenServiceTests
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_IncludesEverySixRequiredClaim()
+    public void IssueTokenPair_IncludesEverySixRequiredClaim()
     {
         User user = User();
 
-        IssuedTokens tokens = await CreateService().IssueTokenPairAsync(user, tokenFamily, null, null);
+        IssuedTokens tokens = CreateService().IssueTokenPair(user, tokenFamily, null, null).Tokens;
         Dictionary<string, string> payload = RawPayload(tokens.AccessToken);
 
         Assert.Equal(user.Id, payload["sub"]);
@@ -108,20 +105,20 @@ public class JwtTokenServiceTests
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_EmitsAdminRoleInLowercase()
+    public void IssueTokenPair_EmitsAdminRoleInLowercase()
     {
-        IssuedTokens tokens = await CreateService().IssueTokenPairAsync(User(UserRole.Admin), tokenFamily, null, null);
+        IssuedTokens tokens = CreateService().IssueTokenPair(User(UserRole.Admin), tokenFamily, null, null).Tokens;
 
         Assert.Equal("admin", RawPayload(tokens.AccessToken)[JwtTokenService.RoleClaim]);
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_UsesTheShortRoleClaimName_NotTheSchemaUri()
+    public void IssueTokenPair_UsesTheShortRoleClaimName_NotTheSchemaUri()
     {
         // Supplying claims as a ClaimsIdentity puts them through outbound claim-type
         // mapping, which rewrites "role" to the long schema URI. This asserts on the
         // encoded payload so that regression cannot slip past again.
-        IssuedTokens tokens = await CreateService().IssueTokenPairAsync(User(), tokenFamily, null, null);
+        IssuedTokens tokens = CreateService().IssueTokenPair(User(), tokenFamily, null, null).Tokens;
         Dictionary<string, string> payload = RawPayload(tokens.AccessToken);
 
         Assert.Equal("role", JwtTokenService.RoleClaim);
@@ -130,9 +127,9 @@ public class JwtTokenServiceTests
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_SetsIssuerAudienceAndConfiguredExpiry()
+    public void IssueTokenPair_SetsIssuerAudienceAndConfiguredExpiry()
     {
-        IssuedTokens tokens = await CreateService(accessMinutes: 15).IssueTokenPairAsync(User(), tokenFamily, null, null);
+        IssuedTokens tokens = CreateService(accessMinutes: 15).IssueTokenPair(User(), tokenFamily, null, null).Tokens;
         JsonWebToken jwt = Parse(tokens.AccessToken);
 
         Assert.Equal("RbacSystem", jwt.Issuer);
@@ -142,18 +139,18 @@ public class JwtTokenServiceTests
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_HonoursANonDefaultAccessLifetime()
+    public void IssueTokenPair_HonoursANonDefaultAccessLifetime()
     {
-        IssuedTokens tokens = await CreateService(accessMinutes: 5).IssueTokenPairAsync(User(), tokenFamily, null, null);
+        IssuedTokens tokens = CreateService(accessMinutes: 5).IssueTokenPair(User(), tokenFamily, null, null).Tokens;
 
         Assert.Equal(now.AddMinutes(5), Parse(tokens.AccessToken).ValidTo);
         Assert.Equal(300, tokens.AccessTokenExpiresInSeconds);
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_ProducesA48ByteRandomRefreshToken()
+    public void IssueTokenPair_ProducesA48ByteRandomRefreshToken()
     {
-        IssuedTokens tokens = await CreateService().IssueTokenPairAsync(User(), tokenFamily, null, null);
+        IssuedTokens tokens = CreateService().IssueTokenPair(User(), tokenFamily, null, null).Tokens;
 
         byte[] decoded = Base64UrlDecode(tokens.RefreshToken);
 
@@ -161,21 +158,22 @@ public class JwtTokenServiceTests
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_ProducesADifferentRefreshTokenEachTime()
+    public void IssueTokenPair_ProducesADifferentRefreshTokenEachTime()
     {
         JwtTokenService service = CreateService();
 
-        IssuedTokens first = await service.IssueTokenPairAsync(User(), tokenFamily, null, null);
-        IssuedTokens second = await service.IssueTokenPairAsync(User(), tokenFamily, null, null);
+        IssuedTokens first = service.IssueTokenPair(User(), tokenFamily, null, null).Tokens;
+        IssuedTokens second = service.IssueTokenPair(User(), tokenFamily, null, null).Tokens;
 
         Assert.NotEqual(first.RefreshToken, second.RefreshToken);
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_StoresOnlyTheHashedRefreshToken()
+    public void IssueTokenPair_ContainsOnlyTheHashedRefreshTokenInItsRecord()
     {
-        IssuedTokens tokens = await CreateService().IssueTokenPairAsync(User(), tokenFamily, null, null);
-        RefreshToken stored = Assert.Single(refreshTokens.Added);
+        PreparedTokenPair prepared = CreateService().IssueTokenPair(User(), tokenFamily, null, null);
+        IssuedTokens tokens = prepared.Tokens;
+        RefreshToken stored = prepared.RefreshTokenRecord;
 
         Assert.NotEqual(tokens.RefreshToken, stored.TokenHash);
         Assert.DoesNotContain(tokens.RefreshToken, stored.TokenHash, StringComparison.Ordinal);
@@ -184,10 +182,11 @@ public class JwtTokenServiceTests
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_HashesWithKeyedHmac_NotABarePlainDigest()
+    public void IssueTokenPair_HashesWithKeyedHmac_NotABarePlainDigest()
     {
-        IssuedTokens tokens = await CreateService().IssueTokenPairAsync(User(), tokenFamily, null, null);
-        RefreshToken stored = Assert.Single(refreshTokens.Added);
+        PreparedTokenPair prepared = CreateService().IssueTokenPair(User(), tokenFamily, null, null);
+        IssuedTokens tokens = prepared.Tokens;
+        RefreshToken stored = prepared.RefreshTokenRecord;
 
         string plainSha256 = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(tokens.RefreshToken))).ToLowerInvariant();
@@ -204,14 +203,13 @@ public class JwtTokenServiceTests
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_PersistsSessionMetadata()
+    public void IssueTokenPair_PreparesSessionMetadata()
     {
         var address = IPAddress.Parse("203.0.113.7");
 
-        _ = await CreateService(refreshDays: 7)
-            .IssueTokenPairAsync(User(), tokenFamily, "curl/8.0", address);
-
-        RefreshToken stored = Assert.Single(refreshTokens.Added);
+        RefreshToken stored = CreateService(refreshDays: 7)
+            .IssueTokenPair(User(), tokenFamily, "curl/8.0", address)
+            .RefreshTokenRecord;
 
         Assert.Equal(tokenFamily, stored.TokenFamily);
         Assert.Equal(now.AddDays(7), stored.ExpiresAt);
@@ -224,33 +222,35 @@ public class JwtTokenServiceTests
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_RecordsTheRotationSourceWhenSupplied()
+    public void IssueTokenPair_RecordsTheRotationSourceWhenSupplied()
     {
         // Rotation is implemented by a later issue, but the parameter has to thread
         // through correctly for that work to build on this.
-        _ = await CreateService().IssueTokenPairAsync(User(), tokenFamily, null, null, "previous-token-id");
+        PreparedTokenPair prepared = CreateService()
+            .IssueTokenPair(User(), tokenFamily, null, null, "previous-token-id");
 
-        Assert.Equal("previous-token-id", Assert.Single(refreshTokens.Added).RotatedFromId);
+        Assert.Equal("previous-token-id", prepared.RefreshTokenRecord.RotatedFromId);
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_TruncatesAnOverlongUserAgent()
+    public void IssueTokenPair_TruncatesAnOverlongUserAgent()
     {
         // user_agent is varchar(500); an oversized header must not break the insert.
-        _ = await CreateService().IssueTokenPairAsync(User(), tokenFamily, new string('x', 600), null);
+        PreparedTokenPair prepared = CreateService()
+            .IssueTokenPair(User(), tokenFamily, new string('x', 600), null);
 
-        Assert.Equal(500, Assert.Single(refreshTokens.Added).UserAgent!.Length);
+        Assert.Equal(500, prepared.RefreshTokenRecord.UserAgent!.Length);
     }
 
     [Fact]
-    public async Task IssueTokenPairAsync_Throws_ForMissingArguments()
+    public void IssueTokenPair_Throws_ForMissingArguments()
     {
         JwtTokenService service = CreateService();
 
-        _ = await Assert.ThrowsAsync<ArgumentNullException>(
-            () => service.IssueTokenPairAsync(null!, tokenFamily, null, null));
-        _ = await Assert.ThrowsAnyAsync<ArgumentException>(
-            () => service.IssueTokenPairAsync(User(), "  ", null, null));
+        _ = Assert.Throws<ArgumentNullException>(
+            () => service.IssueTokenPair(null!, tokenFamily, null, null));
+        _ = Assert.ThrowsAny<ArgumentException>(
+            () => service.IssueTokenPair(User(), "  ", null, null));
     }
 
     private static byte[] Base64UrlDecode(string value)
